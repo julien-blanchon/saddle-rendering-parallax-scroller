@@ -14,7 +14,9 @@ use common::{
     FollowDot, PixelDrift, add_finite_vista, add_forest_stack, add_pixel_snap_pair,
     add_starfield_stack, demo_textures, install_auto_exit, spawn_demo_rig,
 };
-use saddle_rendering_parallax_scroller::{ParallaxDebugSettings, ParallaxDiagnostics, ParallaxScrollerPlugin};
+use saddle_rendering_parallax_scroller::{
+    ParallaxDebugSettings, ParallaxDiagnostics, ParallaxScrollerPlugin,
+};
 
 const DEFAULT_BRP_PORT: u16 = 15_742;
 

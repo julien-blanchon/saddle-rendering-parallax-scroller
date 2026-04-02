@@ -6,7 +6,9 @@ use common::{
     configure_app, demo_textures, spawn_demo_rig, spawn_follow_camera, spawn_tiled_layer,
     update_demo_camera,
 };
-use saddle_rendering_parallax_scroller::{ParallaxAxes, ParallaxLayer, ParallaxLayerStrategy, ParallaxSegmented};
+use saddle_rendering_parallax_scroller::{
+    ParallaxAxes, ParallaxLayer, ParallaxLayerStrategy, ParallaxSegmented,
+};
 
 fn main() {
     let mut app = App::new();
