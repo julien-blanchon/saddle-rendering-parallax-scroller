@@ -1,0 +1,18 @@
+[package]
+name = "saddle-rendering-parallax-scroller"
+version = "0.1.0"
+edition = "2024"
+publish = false
+repository = "https://github.com/julien-blanchon/saddle-rendering-parallax-scroller"
+license = "MIT-0"
+description = "Reusable 2D parallax background system for camera-driven and auto-scrolling scenes in Bevy"
+
+[dependencies]
+bevy = "0.18"
+
+[workspace]
+
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+nonstandard_macro_braces = "warn"

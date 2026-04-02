@@ -1,0 +1,14 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    uses: julien-blanchon/saddle-docs-builder/.github/workflows/build-deploy.yaml@main
+    with:
+      template-repo: julien-blanchon/saddle-docs-builder

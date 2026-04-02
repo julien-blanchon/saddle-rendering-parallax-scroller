@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "common",
+    "basic",
+    "autoscroll_starfield",
+    "camera_follow",
+    "pixel_art_snap",
+    "finite_bounds",
+    "multi_rig",
+    "stress_many_layers",
+    "lab",
+]
+resolver = "3"
+
+[workspace.dependencies]
+bevy = "0.18"
+saddle-rendering-parallax-scroller = { path = ".." }
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+nonstandard_macro_braces = "warn"

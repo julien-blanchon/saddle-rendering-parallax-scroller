@@ -1,0 +1,20 @@
+[package]
+name = "saddle-rendering-parallax-scroller-lab"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["dev"]
+dev = ["dep:bevy_brp_extras"]
+e2e = ["dep:bevy_e2e"]
+
+[dependencies]
+bevy = { version = "0.18", features = ["bevy_remote", "serialize"] }
+bevy_brp_extras = { version = "0.19", optional = true }
+bevy_e2e = { path = "../../../../../external_crates/bevy_e2e", features = ["json"], optional = true }
+saddle-rendering-parallax-scroller = { workspace = true }
+saddle-rendering-parallax-scroller-example-common = { path = "../common" }
+
+[lints]
+workspace = true
