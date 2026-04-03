@@ -64,11 +64,8 @@ fn depth_mapping_supports_foreground_planes_and_manual_bias() {
         ..default()
     };
     let depth_ratio = Some(1.5);
-    let camera_factor = resolve_depth_mapped_camera_factor(
-        Vec2::new(0.2, 0.3),
-        Some(&depth_mapping),
-        depth_ratio,
-    );
+    let camera_factor =
+        resolve_depth_mapped_camera_factor(Vec2::new(0.2, 0.3), Some(&depth_mapping), depth_ratio);
     let scale = resolve_depth_mapped_scale(Vec2::splat(2.0), Some(&depth_mapping), depth_ratio);
     assert!((camera_factor.x + 0.3).abs() < 0.001);
     assert!((camera_factor.y - 0.3).abs() < 0.001);

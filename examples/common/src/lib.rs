@@ -172,7 +172,11 @@ fn update_example_pane_monitors(
     };
 
     pane.rig_count = diagnostics.rigs.len() as f32;
-    pane.layer_count = diagnostics.rigs.iter().map(|rig| rig.layers.len()).sum::<usize>() as f32;
+    pane.layer_count = diagnostics
+        .rigs
+        .iter()
+        .map(|rig| rig.layers.len())
+        .sum::<usize>() as f32;
     pane.first_depth_ratio = diagnostics
         .rigs
         .iter()

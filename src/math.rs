@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 
-use crate::config::{
-    AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxSnap,
-};
+use crate::config::{AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxSnap};
 
 pub(crate) fn advance_phase(current: Vec2, velocity: Vec2, dt: f32) -> Vec2 {
     if dt <= 0.0 {
