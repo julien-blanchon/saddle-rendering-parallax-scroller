@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::config::{AxisRange, ParallaxAxes, ParallaxBounds, ParallaxSnap};
+use crate::config::{
+    AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxSnap,
+};
 
 pub(crate) fn advance_phase(current: Vec2, velocity: Vec2, dt: f32) -> Vec2 {
     if dt <= 0.0 {
@@ -17,6 +19,56 @@ pub(crate) fn compute_unbounded_offset(
     auto_phase: Vec2,
 ) -> Vec2 {
     camera_position * camera_factor + phase + auto_phase
+}
+
+pub(crate) fn perspective_depth_ratio(
+    is_perspective_camera: bool,
+    camera_plane_z: f32,
+    layer_plane_z: f32,
+    reference_plane_z: f32,
+) -> Option<f32> {
+    if !is_perspective_camera {
+        return None;
+    }
+
+    let reference_distance = (camera_plane_z - reference_plane_z).abs();
+    let layer_distance = (camera_plane_z - layer_plane_z).abs();
+    if reference_distance <= f32::EPSILON || layer_distance <= f32::EPSILON {
+        return None;
+    }
+
+    Some(reference_distance / layer_distance)
+}
+
+pub(crate) fn resolve_depth_mapped_camera_factor(
+    base_camera_factor: Vec2,
+    depth_mapping: Option<&ParallaxDepthMapping>,
+    depth_ratio: Option<f32>,
+) -> Vec2 {
+    let Some(depth_mapping) = depth_mapping else {
+        return base_camera_factor;
+    };
+    let Some(depth_ratio) = depth_ratio else {
+        return base_camera_factor;
+    };
+
+    base_camera_factor + Vec2::splat(1.0 - depth_ratio) * depth_mapping.translation_response
+}
+
+pub(crate) fn resolve_depth_mapped_scale(
+    base_scale: Vec2,
+    depth_mapping: Option<&ParallaxDepthMapping>,
+    depth_ratio: Option<f32>,
+) -> Vec2 {
+    let Some(depth_mapping) = depth_mapping else {
+        return base_scale;
+    };
+    let Some(depth_ratio) = depth_ratio else {
+        return base_scale;
+    };
+
+    let scale_factor = (1.0 + (depth_ratio - 1.0) * depth_mapping.scale_response).max(0.0001);
+    base_scale * scale_factor
 }
 
 pub(crate) fn wrap_centered(value: f32, span: f32) -> f32 {

@@ -16,6 +16,7 @@ cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_c
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_finite_bounds
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_zoom
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_pixel_snap
+cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_depth_mapping
 ```
 
 For batch runs outside E2E:

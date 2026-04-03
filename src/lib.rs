@@ -15,8 +15,8 @@ mod systems;
 pub use bundle::{ParallaxLayerBundle, ParallaxRigBundle};
 pub use components::{ParallaxCameraTarget, ParallaxLayer, ParallaxRig};
 pub use config::{
-    AxisRange, ParallaxAxes, ParallaxBounds, ParallaxLayerStrategy, ParallaxSegmented,
-    ParallaxSnap, ParallaxStrategyKind, ParallaxTiledSprite,
+    AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxLayerStrategy,
+    ParallaxSegmented, ParallaxSnap, ParallaxStrategyKind, ParallaxTiledSprite,
 };
 pub use resources::{
     ParallaxDebugSettings, ParallaxDiagnostics, ParallaxLayerDiagnostics, ParallaxRigDiagnostics,
@@ -79,6 +79,7 @@ impl Plugin for ParallaxScrollerPlugin {
             .register_type::<ParallaxCameraTarget>()
             .register_type::<ParallaxDebugSettings>()
             .register_type::<ParallaxDiagnostics>()
+            .register_type::<ParallaxDepthMapping>()
             .register_type::<ParallaxLayer>()
             .register_type::<ParallaxLayerDiagnostics>()
             .register_type::<ParallaxLayerStrategy>()

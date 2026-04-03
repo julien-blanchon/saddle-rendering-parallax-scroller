@@ -5,8 +5,15 @@ edition = "2024"
 publish = false
 
 [dependencies]
-bevy = { workspace = true }
-saddle-rendering-parallax-scroller = { workspace = true }
+bevy = "0.18"
+bevy_flair = "0.7"
+bevy_input_focus = "0.18"
+bevy_ui_widgets = "0.18"
+saddle-rendering-parallax-scroller = { path = "../.." }
+saddle-pane = { git = "https://github.com/julien-blanchon/saddle-pane" }
 
-[lints]
-workspace = true
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+nonstandard_macro_braces = "warn"
+collapsible_if = "allow"

@@ -3,10 +3,12 @@ use bevy::{
     image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
     prelude::*,
 };
+use saddle_pane::prelude::*;
 
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxLayerStrategy,
-    ParallaxRig, ParallaxRigBundle, ParallaxScrollerPlugin, ParallaxSegmented, ParallaxSnap,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer, ParallaxLayerBundle,
+    ParallaxLayerStrategy, ParallaxRig, ParallaxRigBundle, ParallaxScrollerPlugin,
+    ParallaxSegmented, ParallaxSnap,
 };
 
 pub const WINDOW_SIZE: (u32, u32) = (1280, 720);
@@ -33,6 +35,51 @@ pub struct DemoTextures {
     pub vista: Handle<Image>,
 }
 
+#[derive(Resource, Debug, Clone, PartialEq, Pane)]
+#[pane(title = "Parallax", position = "top-right")]
+pub struct ExampleParallaxPane {
+    #[pane(slider, min = 0.0, max = 220.0, step = 1.0)]
+    pub camera_speed: f32,
+    #[pane(slider, min = 0.0, max = 60.0, step = 0.5)]
+    pub vertical_amplitude: f32,
+    #[pane(slider, min = 0.0, max = 0.5, step = 0.01)]
+    pub zoom_amplitude: f32,
+    #[pane(slider, min = 0.0, max = 1.4, step = 0.01)]
+    pub mountain_factor: f32,
+    #[pane(slider, min = 0.0, max = 1.4, step = 0.01)]
+    pub canopy_factor: f32,
+    #[pane(slider, min = -120.0, max = 120.0, step = 1.0)]
+    pub starfield_scroll_y: f32,
+    #[pane(slider, min = 0.0, max = 1.5, step = 0.05)]
+    pub depth_translation_response: f32,
+    #[pane(slider, min = 0.0, max = 2.0, step = 0.05)]
+    pub depth_scale_response: f32,
+    #[pane(monitor)]
+    pub rig_count: f32,
+    #[pane(monitor)]
+    pub layer_count: f32,
+    #[pane(monitor)]
+    pub first_depth_ratio: f32,
+}
+
+impl Default for ExampleParallaxPane {
+    fn default() -> Self {
+        Self {
+            camera_speed: 120.0,
+            vertical_amplitude: 24.0,
+            zoom_amplitude: 0.22,
+            mountain_factor: 0.84,
+            canopy_factor: 1.08,
+            starfield_scroll_y: -48.0,
+            depth_translation_response: 1.0,
+            depth_scale_response: 1.0,
+            rig_count: 0.0,
+            layer_count: 0.0,
+            first_depth_ratio: 0.0,
+        }
+    }
+}
+
 pub fn configure_app(app: &mut App) {
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
@@ -44,6 +91,21 @@ pub fn configure_app(app: &mut App) {
     }));
     app.add_plugins(ParallaxScrollerPlugin::default());
     install_auto_exit(app, "PARALLAX_SCROLLER_EXIT_AFTER_SECONDS");
+}
+
+pub fn install_pane(app: &mut App) {
+    if !app.is_plugin_added::<PanePlugin>() {
+        app.add_plugins((
+            bevy_flair::FlairPlugin,
+            bevy_input_focus::InputDispatchPlugin,
+            bevy_ui_widgets::UiWidgetsPlugins,
+            bevy_input_focus::tab_navigation::TabNavigationPlugin,
+            PanePlugin,
+        ));
+    }
+
+    app.register_pane::<ExampleParallaxPane>()
+        .add_systems(Update, (sync_example_pane, update_example_pane_monitors));
 }
 
 #[derive(Resource)]
@@ -70,6 +132,53 @@ fn auto_exit_after(
     if timer.0.tick(time.delta()).just_finished() {
         app_exit.write(AppExit::Success);
     }
+}
+
+fn sync_example_pane(
+    pane: Res<ExampleParallaxPane>,
+    mut demo_cameras: Query<&mut DemoCamera>,
+    mut layers: Query<(&Name, &mut ParallaxLayer)>,
+) {
+    for mut camera in &mut demo_cameras {
+        camera.horizontal_speed = pane.camera_speed.max(0.0);
+        camera.vertical_amplitude = pane.vertical_amplitude.max(0.0);
+        camera.zoom_amplitude = pane.zoom_amplitude.max(0.0);
+    }
+
+    for (name, mut layer) in &mut layers {
+        let label = name.as_str();
+        if label.contains("Mountain") || label.contains("Cliffs") {
+            layer.camera_factor.x = pane.mountain_factor.max(0.0);
+        }
+        if label.contains("Canopy") || label.contains("Boughs") {
+            layer.camera_factor.x = pane.canopy_factor.max(0.0);
+        }
+        if label.contains("Starfield") {
+            layer.auto_scroll.y = pane.starfield_scroll_y;
+        }
+        if let Some(depth_mapping) = layer.depth_mapping.as_mut() {
+            depth_mapping.translation_response.x = pane.depth_translation_response.max(0.0);
+            depth_mapping.scale_response = pane.depth_scale_response.max(0.0);
+        }
+    }
+}
+
+fn update_example_pane_monitors(
+    diagnostics: Option<Res<ParallaxDiagnostics>>,
+    mut pane: ResMut<ExampleParallaxPane>,
+) {
+    let Some(diagnostics) = diagnostics else {
+        return;
+    };
+
+    pane.rig_count = diagnostics.rigs.len() as f32;
+    pane.layer_count = diagnostics.rigs.iter().map(|rig| rig.layers.len()).sum::<usize>() as f32;
+    pane.first_depth_ratio = diagnostics
+        .rigs
+        .iter()
+        .flat_map(|rig| rig.layers.iter())
+        .find_map(|layer| layer.depth_ratio)
+        .unwrap_or(0.0);
 }
 
 pub fn demo_textures(images: &mut Assets<Image>) -> DemoTextures {

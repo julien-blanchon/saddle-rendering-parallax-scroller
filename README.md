@@ -1,6 +1,6 @@
 # Saddle Rendering Parallax Scroller
 
-Reusable 2D parallax backgrounds for Bevy. The crate is built around independent rigs and layers, supports camera-relative and auto-scrolling motion, and can render either seamless tiled sprites or repeated authored strips without per-frame respawn churn.
+Reusable 2D parallax backgrounds for Bevy. The crate is built around independent rigs and layers, supports camera-relative and auto-scrolling motion, can render either seamless tiled sprites or repeated authored strips without per-frame respawn churn, and now supports perspective-aware 2.5D depth mapping for dolly/zoom scenes.
 
 ## Quick Start
 
@@ -63,6 +63,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 | `ParallaxLayer` | Per-layer authoring config for camera factor, auto-scroll, repeat, bounds, snap mode, tint, phase, origin, scale, and strategy |
 | `ParallaxRigBundle` | Ergonomic bundle for rig entities |
 | `ParallaxLayerBundle` | Ergonomic bundle for layer entities with a `Sprite` |
+| `ParallaxDepthMapping` | Optional perspective-aware depth response that converts layer Z into physical translation/scale parallax |
 | `ParallaxLayerStrategy` | Chooses `TiledSprite` or `Segmented` rendering |
 | `ParallaxTiledSprite` | Tiled-sprite strategy config: `stretch_value` and minimum coverage |
 | `ParallaxSegmented` | Segment-wrap strategy config: extra offscreen rings |
@@ -104,14 +105,18 @@ Use it for:
 - `phase` is a manual offset added before wrapping or clamping.
 - `auto_scroll` accumulates every frame and combines with camera-relative motion.
 - `snap` is applied after wrapping/clamping so pixel-grid output stays stable near wrap boundaries.
+- `depth_mapping` is optional. When present on a perspective-bound rig, the crate derives extra camera motion and scale from `layer.depth` relative to a configurable reference plane. This is the path to use for 2.5D card-stack scenes; start with `camera_factor = Vec2::ZERO` for physically mapped layers.
 
 ## Examples
+
+Every shipped example now includes `saddle-pane` controls for camera motion, parallax response, and runtime diagnostics.
 
 | Example | Purpose | Run |
 |---------|---------|-----|
 | `basic` | Minimal side-scroller-style background stack | `cargo run -p saddle-rendering-parallax-scroller-example-basic` |
 | `autoscroll_starfield` | Pure auto-scroll background motion | `cargo run -p saddle-rendering-parallax-scroller-example-autoscroll_starfield` |
 | `camera_follow` | Camera motion plus layer response | `cargo run -p saddle-rendering-parallax-scroller-example-camera_follow` |
+| `zoom_parallax` | Perspective-aware 2.5D dolly/zoom stack | `cargo run -p saddle-rendering-parallax-scroller-example-zoom_parallax` |
 | `pixel_art_snap` | Pixel-stable snapping vs unsnapped drift | `cargo run -p saddle-rendering-parallax-scroller-example-pixel_art_snap` |
 | `finite_bounds` | Non-infinite clamped vista | `cargo run -p saddle-rendering-parallax-scroller-example-finite_bounds` |
 | `multi_rig` | Two independent rigs in one world | `cargo run -p saddle-rendering-parallax-scroller-example-multi_rig` |
@@ -147,6 +152,7 @@ cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_c
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_finite_bounds
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_zoom
 cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_pixel_snap
+cargo run -p saddle-rendering-parallax-scroller-lab --features e2e -- parallax_depth_mapping
 ```
 
 ## BRP
@@ -168,7 +174,7 @@ BRP_PORT=15742 uv run --project .codex/skills/bevy-brp/script brp extras screens
 
 ## Limitations / Tradeoffs
 
-- The crate is designed for `Camera2d` and orthographic-style 2D composition first. It still works without a bound camera, but viewport-aware coverage is strongest when a camera is bound.
+- The crate is designed for `Camera2d` and orthographic-style 2D composition first. It still works without a bound camera, but viewport-aware coverage is strongest when a camera is bound. `ParallaxDepthMapping` activates only when that bound camera uses a `Perspective` projection.
 - `TiledSprite` inherits Bevy tiled-sprite semantics. In practice that means tile size is driven by the source image size, `stretch_value`, and `scale`.
 - The segment strategy repeats one authored sprite/strip. It does not yet stitch heterogeneous authored segment sequences.
 - The crate intentionally owns `Transform.translation` and `Transform.scale` on layer entities. Configure movement through `ParallaxLayer`, not by animating the layer transform directly.

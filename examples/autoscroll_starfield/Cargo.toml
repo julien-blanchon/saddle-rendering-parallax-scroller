@@ -8,6 +8,7 @@ publish = false
 bevy = { workspace = true }
 saddle-rendering-parallax-scroller = { workspace = true }
 saddle-rendering-parallax-scroller-example-common = { path = "../common" }
+saddle-pane = { git = "https://github.com/julien-blanchon/saddle-pane" }
 
 [lints]
 workspace = true

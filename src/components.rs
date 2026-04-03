@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy::reflect::Reflect;
 
-use crate::config::{ParallaxAxes, ParallaxBounds, ParallaxLayerStrategy, ParallaxSnap};
+use crate::config::{
+    ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxLayerStrategy, ParallaxSnap,
+};
 
 #[derive(Component, Debug, Clone, Reflect)]
 #[require(
@@ -55,6 +57,7 @@ pub struct ParallaxLayer {
     pub origin: Vec2,
     pub phase: Vec2,
     pub depth: f32,
+    pub depth_mapping: Option<ParallaxDepthMapping>,
     pub repeat: ParallaxAxes,
     pub bounds: ParallaxBounds,
     pub snap: ParallaxSnap,
@@ -89,6 +92,11 @@ impl ParallaxLayer {
 
     pub fn with_repeat(mut self, repeat: ParallaxAxes) -> Self {
         self.repeat = repeat;
+        self
+    }
+
+    pub fn with_depth_mapping(mut self, depth_mapping: ParallaxDepthMapping) -> Self {
+        self.depth_mapping = Some(depth_mapping);
         self
     }
 
@@ -142,6 +150,7 @@ impl Default for ParallaxLayer {
             origin: Vec2::ZERO,
             phase: Vec2::ZERO,
             depth: 0.0,
+            depth_mapping: None,
             repeat: ParallaxAxes::both(),
             bounds: ParallaxBounds::default(),
             snap: ParallaxSnap::default(),

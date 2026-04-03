@@ -23,6 +23,7 @@
 | `origin` | `Vec2` | `Vec2::ZERO` | Static local translation inside the rig |
 | `phase` | `Vec2` | `Vec2::ZERO` | Manual phase shift applied before wrapping/clamping |
 | `depth` | `f32` | `0.0` | Local Z value written to the layer transform |
+| `depth_mapping` | `Option<ParallaxDepthMapping>` | `None` | Optional perspective-aware translation/scale response derived from `depth` |
 | `repeat` | `ParallaxAxes` | `both()` | Enables wrap math per axis |
 | `bounds` | `ParallaxBounds` | none | Clamp range for non-repeating axes |
 | `snap` | `ParallaxSnap` | `None` | Rounds final offsets for pixel-stable output |
@@ -31,6 +32,23 @@
 | `scale` | `Vec2` | `Vec2::ONE` | Written to `Transform.scale.xy`; affects rendered size and wrap span |
 | `tint` | `Color` | `Color::WHITE` | Written to `Sprite.color` |
 | `strategy` | `ParallaxLayerStrategy` | `TiledSprite` | Chooses tiling vs segment cloning |
+
+## `ParallaxDepthMapping`
+
+`ParallaxDepthMapping` only participates when the bound camera uses `Projection::Perspective`. It treats `ParallaxLayer.depth` as the physical layer plane and compares it against a reference plane.
+
+| Field | Type | Default | Effect |
+|-------|------|---------|--------|
+| `reference_plane_z` | `f32` | `0.0` | World-space Z plane treated as the gameplay/reference depth |
+| `translation_response` | `Vec2` | `Vec2::ONE` | Multiplies the physically derived translation factor per axis |
+| `scale_response` | `f32` | `1.0` | Blends authored `scale` toward full perspective scale (`0 = no extra scale`, `1 = physical ratio`) |
+
+Recommended starting point for 2.5D scenes:
+
+- `camera_factor = Vec2::ZERO`
+- `depth_mapping = Some(ParallaxDepthMapping::default())`
+- negative `depth` for background cards
+- positive `depth` for foreground cards
 
 ## `ParallaxAxes`
 
@@ -132,6 +150,15 @@ This keeps the strip readable while letting the camera motion sell depth.
 - `strategy = Segmented`
 
 Values above `1` exaggerate motion and make the layer feel close to the camera.
+
+### Perspective 2.5D Cards
+
+- `camera_factor = Vec2::ZERO`
+- `depth_mapping = Some(ParallaxDepthMapping::default())`
+- `depth = -8.0 .. -2.0` for background cards
+- `depth = 2.0 .. 6.0` for foreground cards
+
+This mode makes the layer respond to dolly/zoom moves using its physical plane depth instead of a hand-authored heuristic factor.
 
 ### Pixel-Art Clouds
 

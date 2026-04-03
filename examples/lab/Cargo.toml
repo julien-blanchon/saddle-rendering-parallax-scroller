@@ -15,6 +15,7 @@ bevy_brp_extras = { version = "0.19", optional = true }
 saddle-bevy-e2e = { git = "https://github.com/julien-blanchon/saddle-bevy-e2e", features = ["json"], optional = true }
 saddle-rendering-parallax-scroller = { workspace = true }
 saddle-rendering-parallax-scroller-example-common = { path = "../common" }
+saddle-pane = { git = "https://github.com/julien-blanchon/saddle-pane" }
 
 [lints]
 workspace = true

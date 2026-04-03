@@ -91,6 +91,35 @@ rig.origin + layer.origin + snapped_offset
 
 When the rig entity itself also has a transform, Bevy's normal parent-child transform propagation applies on top.
 
+## Perspective Depth Mapping
+
+`ParallaxDepthMapping` adds an optional physically motivated layer on top of the authored `camera_factor` path.
+
+When all of the following are true:
+
+- the rig is bound to a camera
+- that camera uses `Projection::Perspective`
+- the layer has `depth_mapping = Some(...)`
+
+the crate computes a depth ratio:
+
+```text
+abs(camera_z - reference_plane_z) / abs(camera_z - layer_plane_z)
+```
+
+where `layer_plane_z` comes from the rig's world Z plus `ParallaxLayer.depth`.
+
+That ratio drives two derived values:
+
+- `effective_camera_factor = camera_factor + (1 - depth_ratio) * translation_response`
+- `effective_scale = scale * lerp(1.0, depth_ratio, scale_response)`
+
+Practical implications:
+
+- background planes (`layer_plane_z` farther than the reference plane) get factors between `0` and `1` and shrink slightly during a dolly-in
+- foreground planes can produce negative physical factors, which makes them sweep faster across the frame during camera travel
+- orthographic examples continue to behave exactly as before because the mapping simply stays inactive
+
 ## Strategy Choice
 
 ### Tiled Sprite Strategy
@@ -148,7 +177,7 @@ This is the mechanism that prevents zooming out from exposing gaps.
 `ParallaxDiagnostics` mirrors the live runtime state in a BRP-friendly resource:
 
 - per rig: camera target, camera position, viewport size
-- per layer: strategy, effective offset, wrap span, coverage size, segment grid
+- per layer: strategy, effective camera factor, effective scale, optional depth ratio, effective offset, wrap span, coverage size, segment grid
 
 `ParallaxDebugSettings` enables optional gizmo drawing for:
 

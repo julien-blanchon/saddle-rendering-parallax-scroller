@@ -15,7 +15,9 @@ use crate::{
     ParallaxTiledSprite,
     math::{
         advance_phase, apply_repeat_and_bounds, centered_indices, compute_unbounded_offset,
-        coverage_size, required_segment_grid, safe_abs_scale, snap_offset,
+        coverage_size, perspective_depth_ratio, required_segment_grid,
+        resolve_depth_mapped_camera_factor, resolve_depth_mapped_scale, safe_abs_scale,
+        snap_offset,
     },
     resources::ParallaxRuntimeState,
 };
@@ -24,16 +26,36 @@ use crate::{
 pub(crate) struct RigRuntimeState {
     pub camera_target: Option<Entity>,
     pub camera_position: Vec2,
+    pub camera_depth: f32,
+    pub camera_is_perspective: bool,
     pub viewport_size: Vec2,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy)]
 pub(crate) struct LayerRuntimeState {
+    pub effective_camera_factor: Vec2,
+    pub effective_scale: Vec2,
     pub auto_phase: Vec2,
+    pub depth_ratio: Option<f32>,
     pub effective_offset: Vec2,
     pub wrap_span: Vec2,
     pub coverage_size: Vec2,
     pub segment_grid: UVec2,
+}
+
+impl Default for LayerRuntimeState {
+    fn default() -> Self {
+        Self {
+            effective_camera_factor: Vec2::ZERO,
+            effective_scale: Vec2::ONE,
+            auto_phase: Vec2::ZERO,
+            depth_ratio: None,
+            effective_offset: Vec2::ZERO,
+            wrap_span: Vec2::ZERO,
+            coverage_size: Vec2::ZERO,
+            segment_grid: UVec2::ONE,
+        }
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,7 +116,7 @@ pub(crate) fn ensure_layer_state(
 
 pub(crate) fn track_camera_targets(
     transform_helper: TransformHelper,
-    cameras: Query<&Camera>,
+    cameras: Query<(&Camera, Option<&Projection>)>,
     mut rigs: Query<
         (
             &ParallaxRig,
@@ -112,12 +134,14 @@ pub(crate) fn track_camera_targets(
         }
 
         runtime.camera_position = Vec2::ZERO;
+        runtime.camera_depth = 0.0;
+        runtime.camera_is_perspective = false;
         runtime.viewport_size = Vec2::ZERO;
 
         let Some(target) = camera_target else {
             continue;
         };
-        let Ok(camera) = cameras.get(target.camera) else {
+        let Ok((camera, projection)) = cameras.get(target.camera) else {
             continue;
         };
         let Ok(camera_transform) = transform_helper.compute_global_transform(target.camera) else {
@@ -125,19 +149,26 @@ pub(crate) fn track_camera_targets(
         };
 
         runtime.camera_position = camera_transform.translation().truncate();
-        runtime.viewport_size = camera
-            .logical_viewport_rect()
-            .and_then(|viewport| {
-                let min = camera
-                    .viewport_to_world_2d(&camera_transform, viewport.min)
-                    .ok()?;
-                let max = camera
-                    .viewport_to_world_2d(&camera_transform, viewport.max)
-                    .ok()?;
-                Some((max - min).abs())
-            })
-            .or_else(|| camera.logical_viewport_size())
-            .unwrap_or(Vec2::ZERO);
+        runtime.camera_depth = camera_transform.translation().z;
+        runtime.camera_is_perspective =
+            projection.is_some_and(|projection| matches!(projection, Projection::Perspective(_)));
+        runtime.viewport_size = if runtime.camera_is_perspective {
+            camera.logical_viewport_size().unwrap_or(Vec2::ZERO)
+        } else {
+            camera
+                .logical_viewport_rect()
+                .and_then(|viewport| {
+                    let min = camera
+                        .viewport_to_world_2d(&camera_transform, viewport.min)
+                        .ok()?;
+                    let max = camera
+                        .viewport_to_world_2d(&camera_transform, viewport.max)
+                        .ok()?;
+                    Some((max - min).abs())
+                })
+                .or_else(|| camera.logical_viewport_size())
+                .unwrap_or(Vec2::ZERO)
+        };
     }
 }
 
@@ -163,7 +194,7 @@ pub(crate) fn advance_layer_phase(
 
 pub(crate) fn apply_layout(
     images: Res<Assets<Image>>,
-    rigs: Query<(&ParallaxRig, &RigRuntimeState)>,
+    rigs: Query<(&ParallaxRig, &RigRuntimeState, &GlobalTransform)>,
     mut layers: Query<
         (
             Entity,
@@ -177,7 +208,7 @@ pub(crate) fn apply_layout(
     >,
 ) {
     for (layer_entity, child_of, layer, mut runtime, mut transform, mut sprite) in &mut layers {
-        let Ok((rig, rig_runtime)) = rigs.get(child_of.parent()) else {
+        let Ok((rig, rig_runtime, rig_global_transform)) = rigs.get(child_of.parent()) else {
             continue;
         };
         if !rig.enabled {
@@ -185,7 +216,22 @@ pub(crate) fn apply_layout(
         }
 
         let source_local_size = resolve_source_local_size(layer, &sprite, &images);
-        let scale_abs = safe_abs_scale(layer.scale);
+        let depth_ratio = layer.depth_mapping.as_ref().and_then(|depth_mapping| {
+            perspective_depth_ratio(
+                rig_runtime.camera_is_perspective,
+                rig_runtime.camera_depth,
+                rig_global_transform.translation().z + layer.depth,
+                depth_mapping.reference_plane_z,
+            )
+        });
+        let effective_camera_factor = resolve_depth_mapped_camera_factor(
+            layer.camera_factor,
+            layer.depth_mapping.as_ref(),
+            depth_ratio,
+        );
+        let effective_scale =
+            resolve_depth_mapped_scale(layer.scale, layer.depth_mapping.as_ref(), depth_ratio);
+        let scale_abs = safe_abs_scale(effective_scale);
         let source_world_size = source_local_size * scale_abs;
         let resolved_viewport_size =
             if rig_runtime.viewport_size.x > 0.0 && rig_runtime.viewport_size.y > 0.0 {
@@ -196,7 +242,7 @@ pub(crate) fn apply_layout(
 
         let unbounded_offset = compute_unbounded_offset(
             rig_runtime.camera_position,
-            layer.camera_factor,
+            effective_camera_factor,
             layer.phase,
             runtime.auto_phase,
         );
@@ -210,6 +256,9 @@ pub(crate) fn apply_layout(
             apply_repeat_and_bounds(unbounded_offset, layer.repeat, wrap_span, layer.bounds);
         let snapped_offset = snap_offset(constrained_offset, &layer.snap);
 
+        runtime.effective_camera_factor = effective_camera_factor;
+        runtime.effective_scale = effective_scale;
+        runtime.depth_ratio = depth_ratio;
         runtime.effective_offset = snapped_offset;
         runtime.wrap_span = wrap_span;
 
@@ -218,7 +267,7 @@ pub(crate) fn apply_layout(
             rig.origin.y + layer.origin.y + snapped_offset.y,
             layer.depth,
         );
-        transform.scale = layer.scale.extend(1.0);
+        transform.scale = effective_scale.extend(1.0);
 
         sprite.color = layer.tint;
 
@@ -476,7 +525,10 @@ pub(crate) fn publish_diagnostics(
             layer: entity,
             strategy: layer.strategy.kind(),
             repeat: layer.repeat,
+            effective_camera_factor: layer_runtime.effective_camera_factor,
+            effective_scale: layer_runtime.effective_scale,
             effective_offset: layer_runtime.effective_offset,
+            depth_ratio: layer_runtime.depth_ratio,
             wrap_span: layer_runtime.wrap_span,
             coverage_size: layer_runtime.coverage_size,
             segment_grid: layer_runtime.segment_grid,

@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use saddle_bevy_e2e::{action::Action, actions::assertions, scenario::Scenario};
-use saddle_rendering_parallax_scroller::ParallaxDiagnostics;
+use saddle_rendering_parallax_scroller::{
+    ParallaxDepthMapping, ParallaxDiagnostics, ParallaxLayer,
+};
 
 use crate::{LabEntities, LabMode, LabMotion, set_lab_mode};
 
@@ -16,6 +18,13 @@ struct ViewportSnapshot(Vec2);
 #[derive(Resource, Clone, Copy)]
 struct LayerCountSnapshot(usize);
 
+#[derive(Resource, Clone, Copy)]
+struct DepthMappingSnapshot {
+    effective_camera_factor: Vec2,
+    effective_scale: Vec2,
+    depth_ratio: f32,
+}
+
 pub fn list_scenarios() -> Vec<&'static str> {
     vec![
         "parallax_scroller_smoke",
@@ -23,6 +32,7 @@ pub fn list_scenarios() -> Vec<&'static str> {
         "parallax_finite_bounds",
         "parallax_zoom",
         "parallax_pixel_snap",
+        "parallax_depth_mapping",
     ]
 }
 
@@ -33,6 +43,7 @@ pub fn scenario_by_name(name: &str) -> Option<Scenario> {
         "parallax_finite_bounds" => Some(finite_bounds()),
         "parallax_zoom" => Some(zoom()),
         "parallax_pixel_snap" => Some(pixel_snap()),
+        "parallax_depth_mapping" => Some(depth_mapping()),
         _ => None,
     }
 }
@@ -256,5 +267,101 @@ fn pixel_snap() -> Scenario {
         .then(Action::Screenshot("pixel_snap_b".into()))
         .then(Action::WaitFrames(1))
         .then(assertions::log_summary("parallax_pixel_snap"))
+        .build()
+}
+
+fn depth_mapping() -> Scenario {
+    Scenario::builder("parallax_depth_mapping")
+        .description(
+            "Convert the mountain layer to perspective depth mapping, vary the camera depth, and verify the effective parallax factor and scale respond.",
+        )
+        .then(mode(LabMode::Tight))
+        .then(Action::WaitFrames(20))
+        .then(Action::Custom(Box::new(|world| {
+            let lab = *world.resource::<LabEntities>();
+            if let Some(mut layer) = world.get_mut::<ParallaxLayer>(lab.mountain_layer) {
+                layer.camera_factor = Vec2::ZERO;
+                layer.depth = -4.0;
+                layer.depth_mapping = Some(ParallaxDepthMapping {
+                    reference_plane_z: 0.0,
+                    translation_response: Vec2::new(1.0, 0.0),
+                    scale_response: 1.0,
+                });
+            }
+            *world
+                .get_mut::<Projection>(lab.camera)
+                .expect("lab camera should expose a projection") =
+                Projection::Perspective(PerspectiveProjection {
+                    fov: std::f32::consts::FRAC_PI_4,
+                    near: 0.1,
+                    far: 2000.0,
+                    ..default()
+                });
+            world
+                .get_mut::<Transform>(lab.camera)
+                .expect("lab camera should expose a transform")
+                .translation
+                .z = 8.0;
+        })))
+        .then(Action::WaitFrames(24))
+        .then(assertions::custom(
+            "depth mapping produces non-zero diagnostics under perspective projection",
+            |world| {
+                let mountain_layer = world.resource::<LabEntities>().mountain_layer;
+                world.resource::<ParallaxDiagnostics>().rigs.iter().any(|rig| {
+                    rig.layers.iter().any(|layer| {
+                        layer.layer == mountain_layer
+                            && layer.depth_ratio.is_some()
+                            && layer.effective_camera_factor.length() > 0.01
+                    })
+                })
+            },
+        ))
+        .then(Action::Screenshot("depth_mapping_before".into()))
+        .then(Action::WaitFrames(1))
+        .then(Action::Custom(Box::new(|world| {
+            let lab = *world.resource::<LabEntities>();
+            let layer = world
+                .resource::<ParallaxDiagnostics>()
+                .rigs
+                .iter()
+                .flat_map(|rig| rig.layers.iter())
+                .find(|layer| layer.layer == lab.mountain_layer)
+                .expect("mountain diagnostics should exist after settle");
+            world.insert_resource(DepthMappingSnapshot {
+                effective_camera_factor: layer.effective_camera_factor,
+                effective_scale: layer.effective_scale,
+                depth_ratio: layer.depth_ratio.unwrap_or(1.0),
+            });
+            world
+                .get_mut::<Transform>(lab.camera)
+                .expect("lab camera should expose a transform")
+                .translation
+                .z = 15.0;
+        })))
+        .then(Action::WaitFrames(30))
+        .then(assertions::custom(
+            "effective factor and scale change when camera depth changes",
+            |world| {
+                let before = world.resource::<DepthMappingSnapshot>();
+                let mountain_layer = world.resource::<LabEntities>().mountain_layer;
+                world.resource::<ParallaxDiagnostics>().rigs.iter().any(|rig| {
+                    rig.layers.iter().any(|layer| {
+                        layer.layer == mountain_layer
+                            && layer.depth_ratio.is_some_and(|ratio| {
+                                (ratio - before.depth_ratio).abs() > 0.05
+                            })
+                            && layer
+                                .effective_camera_factor
+                                .distance(before.effective_camera_factor)
+                                > 0.05
+                            && layer.effective_scale.distance(before.effective_scale) > 0.05
+                    })
+                })
+            },
+        ))
+        .then(Action::Screenshot("depth_mapping_after".into()))
+        .then(Action::WaitFrames(1))
+        .then(assertions::log_summary("parallax_depth_mapping"))
         .build()
 }

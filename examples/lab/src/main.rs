@@ -39,6 +39,7 @@ pub struct LabEntities {
     pub forest_rig: Entity,
     pub vista_rig: Entity,
     pub pixel_rig: Entity,
+    pub mountain_layer: Entity,
     pub vista_layer: Entity,
     pub snapped_layer: Entity,
     pub unsnapped_layer: Entity,
@@ -146,11 +147,14 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     // Resolve the two comparison layers by name once the hierarchy exists.
     commands.queue(move |world: &mut World| {
         let mut vista_layer = Entity::PLACEHOLDER;
+        let mut mountain_layer = Entity::PLACEHOLDER;
         let mut snapped_layer = Entity::PLACEHOLDER;
         let mut unsnapped_layer = Entity::PLACEHOLDER;
         let mut names = world.query::<(Entity, &Name)>();
         for (entity, name) in names.iter(world) {
-            if name.as_str() == "Finite Vista" {
+            if name.as_str() == "Mountain Layer" {
+                mountain_layer = entity;
+            } else if name.as_str() == "Finite Vista" {
                 vista_layer = entity;
             } else if name.as_str() == "Snapped Clouds" {
                 snapped_layer = entity;
@@ -164,6 +168,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             forest_rig,
             vista_rig,
             pixel_rig,
+            mountain_layer,
             vista_layer,
             snapped_layer,
             unsnapped_layer,

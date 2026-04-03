@@ -13,6 +13,7 @@ use saddle_rendering_parallax_scroller::{
 fn main() {
     let mut app = App::new();
     configure_app(&mut app);
+    common::install_pane(&mut app);
     app.add_systems(Startup, setup);
     app.add_systems(Update, update_demo_camera);
     app.run();

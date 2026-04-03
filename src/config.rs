@@ -83,6 +83,24 @@ impl ParallaxBounds {
     }
 }
 
+#[derive(Clone, Debug, Reflect, PartialEq)]
+#[reflect(Debug, PartialEq, Default)]
+pub struct ParallaxDepthMapping {
+    pub reference_plane_z: f32,
+    pub translation_response: Vec2,
+    pub scale_response: f32,
+}
+
+impl Default for ParallaxDepthMapping {
+    fn default() -> Self {
+        Self {
+            reference_plane_z: 0.0,
+            translation_response: Vec2::ONE,
+            scale_response: 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Reflect, PartialEq)]
 #[reflect(Debug, PartialEq, Default)]
 pub enum ParallaxSnap {

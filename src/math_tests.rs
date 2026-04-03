@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AxisRange, ParallaxAxes, ParallaxBounds, ParallaxSnap};
+use crate::{AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxSnap};
 
 #[test]
 fn wrap_centered_handles_positive_and_negative_offsets() {
@@ -35,6 +35,45 @@ fn compute_unbounded_offset_ignores_camera_when_factor_is_zero() {
         Vec2::new(-1.0, 3.0),
     );
     assert_eq!(offset, Vec2::new(5.0, 11.0));
+}
+
+#[test]
+fn perspective_depth_ratio_matches_relative_plane_distance() {
+    let ratio = perspective_depth_ratio(true, 12.0, -8.0, 0.0);
+    assert_eq!(ratio, Some(0.6));
+}
+
+#[test]
+fn depth_mapping_converts_physical_depth_into_camera_factor_and_scale() {
+    let depth_mapping = ParallaxDepthMapping::default();
+    let depth_ratio = Some(0.6);
+    let camera_factor =
+        resolve_depth_mapped_camera_factor(Vec2::ZERO, Some(&depth_mapping), depth_ratio);
+    let scale = resolve_depth_mapped_scale(Vec2::splat(2.0), Some(&depth_mapping), depth_ratio);
+    assert!((camera_factor.x - 0.4).abs() < 0.001);
+    assert!((camera_factor.y - 0.4).abs() < 0.001);
+    assert!((scale.x - 1.2).abs() < 0.001);
+    assert!((scale.y - 1.2).abs() < 0.001);
+}
+
+#[test]
+fn depth_mapping_supports_foreground_planes_and_manual_bias() {
+    let depth_mapping = ParallaxDepthMapping {
+        translation_response: Vec2::new(1.0, 0.0),
+        scale_response: 0.5,
+        ..default()
+    };
+    let depth_ratio = Some(1.5);
+    let camera_factor = resolve_depth_mapped_camera_factor(
+        Vec2::new(0.2, 0.3),
+        Some(&depth_mapping),
+        depth_ratio,
+    );
+    let scale = resolve_depth_mapped_scale(Vec2::splat(2.0), Some(&depth_mapping), depth_ratio);
+    assert!((camera_factor.x + 0.3).abs() < 0.001);
+    assert!((camera_factor.y - 0.3).abs() < 0.001);
+    assert!((scale.x - 2.5).abs() < 0.001);
+    assert!((scale.y - 2.5).abs() < 0.001);
 }
 
 #[test]

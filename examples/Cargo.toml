@@ -4,6 +4,7 @@ members = [
     "basic",
     "autoscroll_starfield",
     "camera_follow",
+    "zoom_parallax",
     "pixel_art_snap",
     "finite_bounds",
     "multi_rig",

@@ -9,6 +9,7 @@ use common::{
 fn main() {
     let mut app = App::new();
     configure_app(&mut app);
+    common::install_pane(&mut app);
     app.add_systems(Startup, setup);
     app.run();
 }

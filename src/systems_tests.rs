@@ -3,7 +3,10 @@ use bevy::{
 };
 
 use super::*;
-use crate::{ParallaxLayer, ParallaxLayerStrategy, ParallaxScrollerPlugin, ParallaxSegmented};
+use crate::{
+    ParallaxCameraTarget, ParallaxDepthMapping, ParallaxLayer, ParallaxLayerStrategy,
+    ParallaxScrollerPlugin, ParallaxSegmented,
+};
 
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
 struct Activate;
@@ -102,4 +105,53 @@ fn deactivate_schedule_cleans_generated_segments() {
 
     app.world_mut().run_schedule(Deactivate);
     assert_eq!(segment_count(&mut app), 0);
+}
+
+#[test]
+fn perspective_depth_mapping_changes_offset_and_scale_from_camera_depth() {
+    let mut app = test_app();
+    let image = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        images.add(test_image())
+    };
+
+    let camera = app
+        .world_mut()
+        .spawn((
+            Camera::default(),
+            Projection::Perspective(PerspectiveProjection::default()),
+            Transform::from_xyz(10.0, 0.0, 12.0),
+            GlobalTransform::from(Transform::from_xyz(10.0, 0.0, 12.0)),
+        ))
+        .id();
+    let rig = app
+        .world_mut()
+        .spawn((ParallaxRig::default(), ParallaxCameraTarget::new(camera)))
+        .id();
+    let layer = app
+        .world_mut()
+        .spawn((
+            ChildOf(rig),
+            Sprite::from_image(image),
+            Transform::default(),
+            ParallaxLayer {
+                camera_factor: Vec2::ZERO,
+                depth: -8.0,
+                depth_mapping: Some(ParallaxDepthMapping::default()),
+                source_size: Some(Vec2::new(100.0, 50.0)),
+                ..default()
+            },
+        ))
+        .id();
+
+    app.world_mut().run_schedule(Activate);
+    app.world_mut().run_schedule(Tick);
+
+    let transform = app
+        .world()
+        .get::<Transform>(layer)
+        .expect("layer transform should exist");
+    assert!((transform.translation.x - 4.0).abs() < 0.001);
+    assert!((transform.scale.x - 0.6).abs() < 0.001);
+    assert!((transform.scale.y - 0.6).abs() < 0.001);
 }
