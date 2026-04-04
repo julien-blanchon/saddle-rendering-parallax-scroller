@@ -1,11 +1,18 @@
-use saddle_rendering_parallax_scroller_example_common as common;
+//! Finite-bounds parallax — a single non-repeating layer clamped to a horizontal range.
+//!
+//! Demonstrates:
+//! - Using `ParallaxBounds::horizontal(min, max)` to clamp layer scroll range
+//! - Disabling repeat (`ParallaxAxes::none()`) for a one-shot background
+//! - A finite vista image that does not tile — it stops at the configured bounds
 
 use bevy::prelude::*;
 
-use common::{
-    add_finite_vista, configure_app, demo_textures, spawn_demo_rig, spawn_follow_camera,
-    update_demo_camera,
+use saddle_rendering_parallax_scroller::{
+    ParallaxAxes, ParallaxBounds, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle,
+    ParallaxRig, ParallaxRigBundle,
 };
+use saddle_rendering_parallax_scroller_example_common as common;
+use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 
 fn main() {
     let mut app = App::new();
@@ -18,7 +25,61 @@ fn main() {
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let textures = demo_textures(&mut images);
-    let camera = spawn_follow_camera(&mut commands);
-    let rig = spawn_demo_rig(&mut commands, camera, "Finite Bounds Rig", Vec3::ZERO);
-    add_finite_vista(&mut commands, rig, &textures);
+
+    // --- Camera ---
+    let camera = commands
+        .spawn((
+            Name::new("Demo Camera"),
+            Camera2d,
+            Projection::Orthographic(OrthographicProjection {
+                scale: 1.0,
+                ..OrthographicProjection::default_2d()
+            }),
+            DemoCamera {
+                horizontal_speed: 120.0,
+                vertical_amplitude: 24.0,
+                zoom_amplitude: 0.22,
+            },
+            Transform::default(),
+        ))
+        .id();
+
+    // --- Rig ---
+    let rig = commands
+        .spawn((
+            Name::new("Finite Bounds Rig"),
+            ParallaxRigBundle {
+                rig: ParallaxRig {
+                    enabled: true,
+                    origin: Vec2::ZERO,
+                },
+                transform: Transform::from_translation(Vec3::ZERO),
+                ..default()
+            },
+            ParallaxCameraTarget::new(camera),
+        ))
+        .id();
+
+    // Single layer: Finite vista — no repeat, clamped to [-160, 160] horizontal bounds
+    // The layer scrolls at 0.88x camera speed but stops at the edges instead of wrapping.
+    commands.spawn((
+        Name::new("Finite Vista"),
+        ChildOf(rig),
+        ParallaxLayerBundle {
+            layer: ParallaxLayer {
+                enabled: true,
+                repeat: ParallaxAxes::none(),
+                bounds: ParallaxBounds::horizontal(-160.0, 160.0),
+                camera_factor: Vec2::new(0.88, 1.0),
+                origin: Vec2::new(0.0, -40.0),
+                scale: Vec2::ONE,
+                tint: Color::WHITE,
+                source_size: Some(Vec2::new(640.0, 220.0)),
+                depth: 0.0,
+                ..default()
+            },
+            sprite: Sprite::from_image(textures.vista.clone()),
+            ..default()
+        },
+    ));
 }
