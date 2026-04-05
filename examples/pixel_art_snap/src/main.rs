@@ -7,12 +7,12 @@
 
 use bevy::prelude::*;
 
+use common::{configure_app, demo_textures};
 use saddle_rendering_parallax_scroller::{
     ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxRig,
     ParallaxRigBundle, ParallaxSnap,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
-use common::{configure_app, demo_textures};
 
 /// Marker for the slowly-drifting pixel camera.
 #[derive(Component)]

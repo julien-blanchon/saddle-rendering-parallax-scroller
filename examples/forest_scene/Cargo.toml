@@ -1,0 +1,14 @@
+[package]
+name = "saddle-rendering-parallax-scroller-example-forest-scene"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bevy = { workspace = true }
+saddle-rendering-parallax-scroller = { workspace = true }
+saddle-rendering-parallax-scroller-example-common = { path = "../common" }
+saddle-pane = { git = "https://github.com/julien-blanchon/saddle-pane" }
+
+[lints]
+workspace = true

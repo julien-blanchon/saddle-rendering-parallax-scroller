@@ -33,6 +33,30 @@
 | `tint` | `Color` | `Color::WHITE` | Written to `Sprite.color` |
 | `strategy` | `ParallaxLayerStrategy` | `TiledSprite` | Chooses tiling vs segment cloning |
 
+### Builder Methods
+
+`ParallaxLayer` provides a fluent builder API for ergonomic construction:
+
+```rust
+ParallaxLayer::tiled()           // default tiled strategy
+ParallaxLayer::segmented()       // default segmented strategy
+    .with_camera_factor(Vec2)
+    .with_auto_scroll(Vec2)
+    .with_repeat(ParallaxAxes)
+    .with_depth(f32)
+    .with_depth_mapping(ParallaxDepthMapping)
+    .with_bounds(ParallaxBounds)
+    .with_snap(ParallaxSnap)
+    .with_source_size(Vec2)
+    .with_origin(Vec2)
+    .with_phase(Vec2)
+    .with_scale(Vec2)
+    .with_tint(Color)
+    .with_coverage_margin(Vec2)
+    .with_enabled(bool)
+    .with_strategy(ParallaxLayerStrategy)
+```
+
 ## `ParallaxDepthMapping`
 
 `ParallaxDepthMapping` only participates when the bound camera uses `Projection::Perspective`. It treats `ParallaxLayer.depth` as the physical layer plane and compares it against a reference plane.
@@ -167,3 +191,30 @@ This mode makes the layer respond to dolly/zoom moves using its physical plane d
 - even-valued `source_size`
 
 This minimizes shimmer during slow camera drift.
+
+### Multi-Layer Atmospheric Scene (Forest / City)
+
+For a convincing depth scene with 5-7 layers, use **atmospheric perspective** — far layers are lighter/bluer, near layers are darker/more saturated:
+
+| Layer | camera_factor.x | Strategy | Tint/Color Notes |
+|-------|----------------|----------|-----------------|
+| Sky | 0.05 - 0.10 | Tiled | Full-screen gradient fill |
+| Far mountains | 0.15 - 0.25 | Segmented | Light, desaturated, blue-tinted |
+| Near mountains | 0.30 - 0.40 | Segmented | Medium tone, less blue |
+| Far trees/buildings | 0.50 - 0.60 | Segmented | Medium-dark, subtle blue |
+| Mid trees/buildings | 0.70 - 0.80 | Segmented | Darker, more saturated |
+| Near trees/buildings | 0.85 - 0.95 | Segmented | Darkest, full saturation |
+| Ground | 1.00 | Tiled | Locked to camera for gameplay |
+
+See `forest_scene` and `city_skyline` examples for complete implementations.
+
+### Interactive / Platformer Parallax
+
+For camera-follow parallax (no auto-scroll):
+
+- Set up a `ParallaxCameraTarget` bound to the gameplay camera
+- Move the camera with a smooth lerp following the player
+- The parallax layers respond automatically to camera position changes
+- Use `camera_factor` values from 0.1 (far) to 0.95 (near) for depth
+
+See `platformer_demo` for a complete WASD + jump implementation.

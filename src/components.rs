@@ -139,6 +139,21 @@ impl ParallaxLayer {
         self.coverage_margin = coverage_margin.max(Vec2::ZERO);
         self
     }
+
+    pub fn with_depth(mut self, depth: f32) -> Self {
+        self.depth = depth;
+        self
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    pub fn with_strategy(mut self, strategy: ParallaxLayerStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
 }
 
 impl Default for ParallaxLayer {

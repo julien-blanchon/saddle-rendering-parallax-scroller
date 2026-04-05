@@ -186,6 +186,22 @@ This is the mechanism that prevents zooming out from exposing gaps.
 - wrap spans
 - offset vectors
 
+## Example Texture Architecture
+
+All examples use procedurally generated textures (no external asset files). The `common/` crate provides two tiers:
+
+1. **Legacy textures** (`sky`, `mountains`, `canopy`, `stars`, `pixel_clouds`, `vista`) — simple gradient/pattern textures for the original examples
+2. **Rich scene textures** (`forest_*`, `city_*`) — atmospheric multi-layer scenes using fractal noise, value noise with smoothstep interpolation, and layered silhouette generation
+
+The rich textures apply **atmospheric perspective**: far layers use lighter, bluer tones while near layers use darker, more saturated colors. This mimics the effect of light scattering through air, creating a convincing depth illusion even with procedural art.
+
+Texture generators include:
+- `forest_sky_gradient` — sky gradient with fbm-based cloud wisps
+- `forest_mountain_silhouette` — parameterized mountain ridges from sine wave sums + noise
+- `tree_silhouette_strip` — procedural conifer forests with random tree placement and height
+- `building_silhouette_strip` — city buildings with optional lit window patterns
+- `ground_strip` — noisy textured ground
+
 ## Key Invariants
 
 - every layer belongs to one rig via `ChildOf`

@@ -5003,6 +5003,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "saddle-rendering-parallax-scroller-example-city-skyline"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
 name = "saddle-rendering-parallax-scroller-example-common"
 version = "0.1.0"
 dependencies = [
@@ -5015,7 +5025,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "saddle-rendering-parallax-scroller-example-endless-runner"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
 name = "saddle-rendering-parallax-scroller-example-finite_bounds"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
+name = "saddle-rendering-parallax-scroller-example-forest-scene"
 version = "0.1.0"
 dependencies = [
  "bevy",
@@ -5036,6 +5066,16 @@ dependencies = [
 
 [[package]]
 name = "saddle-rendering-parallax-scroller-example-pixel_art_snap"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
+name = "saddle-rendering-parallax-scroller-example-platformer-demo"
 version = "0.1.0"
 dependencies = [
  "bevy",

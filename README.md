@@ -109,11 +109,15 @@ Use it for:
 
 ## Examples
 
-Every shipped example now includes `saddle-pane` controls for camera motion, parallax response, and runtime diagnostics.
+Every shipped example includes `saddle-pane` controls for camera motion, parallax response, and runtime diagnostics. All textures are procedurally generated with atmospheric perspective — no external asset files needed.
 
 | Example | Purpose | Run |
 |---------|---------|-----|
 | `basic` | Minimal side-scroller-style background stack | `cargo run -p saddle-rendering-parallax-scroller-example-basic` |
+| `forest_scene` | Rich 7-layer forest with atmospheric depth (mountains, tree lines, ground) | `cargo run -p saddle-rendering-parallax-scroller-example-forest-scene` |
+| `city_skyline` | Urban dusk panorama with building silhouettes and lit windows | `cargo run -p saddle-rendering-parallax-scroller-example-city-skyline` |
+| `platformer_demo` | Keyboard-controlled character (WASD/Space) with camera-follow parallax | `cargo run -p saddle-rendering-parallax-scroller-example-platformer-demo` |
+| `endless_runner` | Auto-scrolling city with speed control (Up/Down arrows) | `cargo run -p saddle-rendering-parallax-scroller-example-endless-runner` |
 | `autoscroll_starfield` | Pure auto-scroll background motion | `cargo run -p saddle-rendering-parallax-scroller-example-autoscroll_starfield` |
 | `camera_follow` | Camera motion plus layer response | `cargo run -p saddle-rendering-parallax-scroller-example-camera_follow` |
 | `zoom_parallax` | Perspective-aware 2.5D dolly/zoom stack | `cargo run -p saddle-rendering-parallax-scroller-example-zoom_parallax` |

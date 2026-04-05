@@ -9,12 +9,12 @@
 
 use bevy::prelude::*;
 
+use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 use saddle_rendering_parallax_scroller::{
     ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxLayerStrategy,
     ParallaxRig, ParallaxRigBundle, ParallaxSegmented,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
-use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 
 /// Marker for the entity the camera follows.
 #[derive(Component)]

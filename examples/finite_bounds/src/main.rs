@@ -7,12 +7,12 @@
 
 use bevy::prelude::*;
 
+use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 use saddle_rendering_parallax_scroller::{
     ParallaxAxes, ParallaxBounds, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle,
     ParallaxRig, ParallaxRigBundle,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
-use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 
 fn main() {
     let mut app = App::new();

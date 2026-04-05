@@ -9,6 +9,10 @@ members = [
     "finite_bounds",
     "multi_rig",
     "stress_many_layers",
+    "forest_scene",
+    "city_skyline",
+    "platformer_demo",
+    "endless_runner",
     "lab",
 ]
 resolver = "3"
