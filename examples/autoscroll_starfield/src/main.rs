@@ -10,8 +10,7 @@ use bevy::prelude::*;
 
 use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxRig,
-    ParallaxRigBundle,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxRig,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
 
@@ -49,14 +48,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let rig = commands
         .spawn((
             Name::new("Starfield Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();
@@ -65,41 +62,35 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         Name::new("Starfield"),
         ChildOf(rig),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::ONE,
-                auto_scroll: Vec2::new(-12.0, -48.0),
-                repeat: ParallaxAxes::both(),
-                scale: Vec2::splat(2.0),
-                coverage_margin: Vec2::new(80.0, 80.0),
-                tint: Color::srgba(1.0, 1.0, 1.0, 0.95),
-                depth: 0.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.stars.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::ONE,
+            auto_scroll: Vec2::new(-12.0, -48.0),
+            repeat: ParallaxAxes::both(),
+            scale: Vec2::splat(2.0),
+            coverage_margin: Vec2::new(80.0, 80.0),
+            tint: Color::srgba(1.0, 1.0, 1.0, 0.95),
+            depth: 0.0,
             ..default()
         },
+        Sprite::from_image(textures.stars.clone()),
     ));
 
     // Layer 2: Cloud bands — slower auto-scroll in different direction, with initial phase offset
     commands.spawn((
         Name::new("Cloud Bands"),
         ChildOf(rig),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::ONE,
-                auto_scroll: Vec2::new(18.0, -12.0),
-                repeat: ParallaxAxes::both(),
-                scale: Vec2::splat(3.0),
-                tint: Color::srgba(0.68, 0.86, 1.0, 0.22),
-                phase: Vec2::new(60.0, 40.0),
-                depth: 1.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.pixel_clouds.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::ONE,
+            auto_scroll: Vec2::new(18.0, -12.0),
+            repeat: ParallaxAxes::both(),
+            scale: Vec2::splat(3.0),
+            tint: Color::srgba(0.68, 0.86, 1.0, 0.22),
+            phase: Vec2::new(60.0, 40.0),
+            depth: 1.0,
             ..default()
         },
+        Sprite::from_image(textures.pixel_clouds.clone()),
     ));
 }

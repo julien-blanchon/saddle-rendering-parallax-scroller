@@ -5,6 +5,72 @@ use crate::config::{
     ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxLayerStrategy, ParallaxSnap,
 };
 
+// ---------------------------------------------------------------------------
+// Runtime state components (readable by user systems)
+// ---------------------------------------------------------------------------
+
+/// Per-rig runtime state. Populated by `TrackCamera`. Read-only for consumers.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component, Debug, Default)]
+pub struct RigRuntimeState {
+    pub camera_target: Option<Entity>,
+    pub camera_position: Vec2,
+    pub camera_depth: f32,
+    pub camera_is_perspective: bool,
+    pub viewport_size: Vec2,
+}
+
+/// Per-layer runtime state. Populated by `ComputeOffsets`. Read-only for consumers.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component, Debug, Default)]
+pub struct LayerRuntimeState {
+    pub effective_camera_factor: Vec2,
+    pub effective_scale: Vec2,
+    pub auto_phase: Vec2,
+    pub depth_ratio: Option<f32>,
+    pub effective_offset: Vec2,
+    pub wrap_span: Vec2,
+    pub coverage_size: Vec2,
+    pub segment_grid: UVec2,
+}
+
+impl Default for LayerRuntimeState {
+    fn default() -> Self {
+        Self {
+            effective_camera_factor: Vec2::ZERO,
+            effective_scale: Vec2::ONE,
+            auto_phase: Vec2::ZERO,
+            depth_ratio: None,
+            effective_offset: Vec2::ZERO,
+            wrap_span: Vec2::ZERO,
+            coverage_size: Vec2::ZERO,
+            segment_grid: UVec2::ONE,
+        }
+    }
+}
+
+/// Intermediate computed values written by `ComputeOffsets`, read by `WriteTransforms`.
+///
+/// **Custom offset hook**: schedule your system
+/// `after(ParallaxScrollerSystems::ComputeOffsets).before(ParallaxScrollerSystems::WriteTransforms)`
+/// and mutate this component to inject wobble, shake, event bursts, etc.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component, Debug, Default)]
+pub struct ParallaxLayerComputed {
+    /// Computed parallax offset (before user_offset is applied).
+    pub offset: Vec2,
+    /// Computed effective scale (before user_scale is applied).
+    pub scale: Vec2,
+    /// The layer's depth value, passed through for convenience.
+    pub depth: f32,
+}
+
+/// Internal marker for managed segment children. Not public API.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ManagedSegment {
+    pub grid: IVec2,
+}
+
 #[derive(Component, Debug, Clone, Reflect)]
 #[require(
     Transform,
@@ -17,6 +83,10 @@ use crate::config::{
 pub struct ParallaxRig {
     pub enabled: bool,
     pub origin: Vec2,
+    /// Multiplier applied to auto-scroll dt for all child layers.
+    /// `1.0` = normal speed, `2.0` = double, `0.0` = frozen auto-scroll.
+    /// Does not affect camera-factor (spatial parallax ratio).
+    pub speed_multiplier: f32,
 }
 
 impl Default for ParallaxRig {
@@ -24,7 +94,15 @@ impl Default for ParallaxRig {
         Self {
             enabled: true,
             origin: Vec2::ZERO,
+            speed_multiplier: 1.0,
         }
+    }
+}
+
+impl ParallaxRig {
+    pub fn with_speed_multiplier(mut self, speed_multiplier: f32) -> Self {
+        self.speed_multiplier = speed_multiplier;
+        self
     }
 }
 
@@ -66,6 +144,14 @@ pub struct ParallaxLayer {
     pub scale: Vec2,
     pub tint: Color,
     pub strategy: ParallaxLayerStrategy,
+    /// User-controlled offset added on top of the computed parallax offset.
+    /// Write this from your own systems to add wobble, shake, etc.
+    pub user_offset: Vec2,
+    /// User-controlled scale multiplied on top of the computed parallax scale.
+    /// Defaults to `Vec2::ONE` (no effect).
+    pub user_scale: Vec2,
+    /// Rotation in radians applied to the layer transform (around Z axis).
+    pub rotation: f32,
 }
 
 impl ParallaxLayer {
@@ -154,6 +240,21 @@ impl ParallaxLayer {
         self.strategy = strategy;
         self
     }
+
+    pub fn with_user_offset(mut self, user_offset: Vec2) -> Self {
+        self.user_offset = user_offset;
+        self
+    }
+
+    pub fn with_user_scale(mut self, user_scale: Vec2) -> Self {
+        self.user_scale = user_scale;
+        self
+    }
+
+    pub fn with_rotation(mut self, rotation: f32) -> Self {
+        self.rotation = rotation;
+        self
+    }
 }
 
 impl Default for ParallaxLayer {
@@ -174,6 +275,9 @@ impl Default for ParallaxLayer {
             scale: Vec2::ONE,
             tint: Color::WHITE,
             strategy: ParallaxLayerStrategy::default(),
+            user_offset: Vec2::ZERO,
+            user_scale: Vec2::ONE,
+            rotation: 0.0,
         }
     }
 }

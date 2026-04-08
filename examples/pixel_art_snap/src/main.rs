@@ -9,8 +9,7 @@ use bevy::prelude::*;
 
 use common::{configure_app, demo_textures};
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxRig,
-    ParallaxRigBundle, ParallaxSnap,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxRig, ParallaxSnap,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
 
@@ -44,14 +43,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let rig = commands
         .spawn((
             Name::new("Pixel Snap Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();
@@ -60,42 +57,36 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         Name::new("Unsnapped Clouds"),
         ChildOf(rig),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::new(0.92, 1.0),
-                repeat: ParallaxAxes::horizontal(),
-                origin: Vec2::new(0.0, 72.0),
-                scale: Vec2::splat(4.0),
-                tint: Color::srgba(1.0, 1.0, 1.0, 0.92),
-                snap: ParallaxSnap::None,
-                depth: 0.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.pixel_clouds.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::new(0.92, 1.0),
+            repeat: ParallaxAxes::horizontal(),
+            origin: Vec2::new(0.0, 72.0),
+            scale: Vec2::splat(4.0),
+            tint: Color::srgba(1.0, 1.0, 1.0, 0.92),
+            snap: ParallaxSnap::None,
+            depth: 0.0,
             ..default()
         },
+        Sprite::from_image(textures.pixel_clouds.clone()),
     ));
 
     // Layer 2: Snapped clouds (bottom) — locked to pixel grid, no shimmer
     commands.spawn((
         Name::new("Snapped Clouds"),
         ChildOf(rig),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::new(0.92, 1.0),
-                repeat: ParallaxAxes::horizontal(),
-                origin: Vec2::new(0.0, -56.0),
-                scale: Vec2::splat(4.0),
-                tint: Color::srgba(1.0, 1.0, 1.0, 0.92),
-                snap: ParallaxSnap::Pixel,
-                depth: 1.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.pixel_clouds.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::new(0.92, 1.0),
+            repeat: ParallaxAxes::horizontal(),
+            origin: Vec2::new(0.0, -56.0),
+            scale: Vec2::splat(4.0),
+            tint: Color::srgba(1.0, 1.0, 1.0, 0.92),
+            snap: ParallaxSnap::Pixel,
+            depth: 1.0,
             ..default()
         },
+        Sprite::from_image(textures.pixel_clouds.clone()),
     ));
 }
 

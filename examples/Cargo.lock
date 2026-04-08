@@ -5025,6 +5025,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "saddle-rendering-parallax-scroller-example-custom-offset"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
 name = "saddle-rendering-parallax-scroller-example-endless-runner"
 version = "0.1.0"
 dependencies = [
@@ -5052,6 +5062,16 @@ dependencies = [
  "saddle-pane",
  "saddle-rendering-parallax-scroller",
  "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
+name = "saddle-rendering-parallax-scroller-example-game-demo"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-bevy-e2e",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
 ]
 
 [[package]]
@@ -5085,7 +5105,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "saddle-rendering-parallax-scroller-example-speed-ramp"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
 name = "saddle-rendering-parallax-scroller-example-stress_many_layers"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "saddle-pane",
+ "saddle-rendering-parallax-scroller",
+ "saddle-rendering-parallax-scroller-example-common",
+]
+
+[[package]]
+name = "saddle-rendering-parallax-scroller-example-time-control"
 version = "0.1.0"
 dependencies = [
  "bevy",

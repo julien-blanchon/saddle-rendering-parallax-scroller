@@ -13,6 +13,10 @@ members = [
     "city_skyline",
     "platformer_demo",
     "endless_runner",
+    "custom_offset",
+    "time_control",
+    "speed_ramp",
+    "game_demo",
     "lab",
 ]
 resolver = "3"

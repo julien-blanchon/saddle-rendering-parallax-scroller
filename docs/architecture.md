@@ -11,23 +11,24 @@ There is no global singleton. Multiple rigs can coexist in one world, share the 
 
 ## Runtime Flow
 
-The plugin uses five public phases:
+The plugin uses six public phases:
 
 1. `TrackCamera`
 2. `UpdateOffsets`
-3. `ApplyLayout`
-4. `Diagnostics`
-5. `Debug`
+3. `ComputeOffsets`
+4. `WriteTransforms`
+5. `Diagnostics`
+6. `Debug`
 
 The default chain is:
 
 ```text
-TrackCamera -> UpdateOffsets -> ApplyLayout -> Diagnostics -> Debug
+TrackCamera -> UpdateOffsets -> ComputeOffsets -> [user hook] -> WriteTransforms -> Diagnostics -> Debug
 ```
 
 ### `TrackCamera`
 
-- ensure internal rig state exists
+- ensure internal rig state exists (`RigRuntimeState`)
 - resolve the bound camera entity, if any
 - read current camera position
 - compute the current viewport size in world units from `Camera::logical_viewport_rect()` plus `viewport_to_world_2d`
@@ -41,25 +42,104 @@ Using the camera viewport conversion path instead of hand-rolled projection math
 
 ### `UpdateOffsets`
 
-- ensure internal layer state exists
-- accumulate `auto_scroll * dt`
+- ensure internal layer state exists (`LayerRuntimeState`, `ParallaxLayerComputed`)
+- accumulate `auto_scroll * dt * time_scale * rig.speed_multiplier`
 - skip accumulation for disabled layers
 - freeze accumulation for all layers under a disabled rig
 
 The accumulated auto-scroll phase is stored once per layer. No child churn happens here.
 
-### `ApplyLayout`
+### `ComputeOffsets`
 
 For each layer:
 
 1. resolve one-segment source size
-2. compute the unbounded offset
-3. wrap or clamp it per axis
-4. snap it if requested
-5. write the final layer transform
-6. apply the selected render strategy
+2. compute depth ratio (for perspective cameras with depth mapping)
+3. derive effective camera factor and scale
+4. compute the unbounded offset: `camera_pos * factor + phase + auto_phase`
+5. wrap or clamp per axis
+6. snap if requested
+7. write the result to `ParallaxLayerComputed { offset, scale, depth }`
+8. fire `ParallaxLayerWrapped` messages when wrapping occurs
+
+This phase does **not** touch `Transform` or `Sprite`. It only writes to `ParallaxLayerComputed` and `LayerRuntimeState`.
+
+### Custom Offset Hook
+
+Between `ComputeOffsets` and `WriteTransforms`, users can schedule their own systems to read and modify `ParallaxLayerComputed`:
+
+```rust
+app.add_systems(
+    Update,
+    my_wobble_system
+        .after(ParallaxScrollerSystems::ComputeOffsets)
+        .before(ParallaxScrollerSystems::WriteTransforms),
+);
+
+fn my_wobble_system(time: Res<Time>, mut layers: Query<&mut ParallaxLayerComputed>) {
+    for mut computed in &mut layers {
+        computed.offset.y += (time.elapsed_secs() * 3.0).sin() * 8.0;
+    }
+}
+```
+
+This is the primary extensibility mechanism. Any offset modification — wobble, shake, event-driven bursts, procedural drift — can be injected here without fighting the crate's transform ownership.
+
+### `WriteTransforms`
+
+For each layer:
+
+1. read `ParallaxLayerComputed` (potentially modified by user systems)
+2. add `user_offset` and multiply by `user_scale`
+3. write the final `Transform` (translation, scale, rotation)
+4. write `Sprite` (color, image_mode, custom_size)
+5. manage segmented child entities via `sync_segment_children`
+
+The final layer translation is:
+
+```text
+rig.origin + layer.origin + computed.offset + layer.user_offset
+```
+
+The final scale is:
+
+```text
+computed.scale * layer.user_scale
+```
 
 Disabled rigs freeze their previously resolved layout. This keeps runtime toggles honest: disabling a rig stops both camera tracking and auto-scroll advancement without despawning the layer stack.
+
+## Time Scale and Speed Control
+
+Two mechanisms control auto-scroll speed:
+
+- **`ParallaxTimeScale`** (global resource): multiplies `dt` for all rigs. `0.0` = paused, `1.0` = normal, `2.0` = double speed.
+- **`ParallaxRig::speed_multiplier`** (per-rig): multiplies `dt` for that rig's child layers only.
+
+The effective dt for auto-scroll is: `time.delta_secs() * time_scale.0 * rig.speed_multiplier`
+
+Neither affects camera-factor (spatial parallax ratio) — only auto-scroll accumulation.
+
+## Public Runtime State
+
+Both `RigRuntimeState` and `LayerRuntimeState` are public components, queryable from user systems:
+
+- **`RigRuntimeState`**: camera position, camera depth, viewport size, perspective flag
+- **`LayerRuntimeState`**: effective camera factor, effective scale, auto phase, depth ratio, effective offset, wrap span, coverage size, segment grid
+
+This enables user systems to build on top of the crate — e.g., "spawn particles where the ground layer is" or "scale UI to match parallax viewport".
+
+## Messages
+
+The crate emits buffered messages (Bevy `Message` / `MessageWriter` / `MessageReader`):
+
+| Message | When |
+|---------|------|
+| `ParallaxActivated` | Runtime activated via activate schedule |
+| `ParallaxDeactivated` | Runtime deactivated via deactivate schedule |
+| `ParallaxLayerWrapped` | A layer's offset wraps around on a repeating axis |
+| `ParallaxSegmentSpawned` | A segment child is spawned for a segmented layer |
+| `ParallaxSegmentDespawned` | A segment child is despawned |
 
 ## Offset Math
 
@@ -82,12 +162,6 @@ Finally the snap mode is applied:
 - `None`: no post-process
 - `Pixel`: round to whole units
 - `Grid(step)`: round to the provided step per axis
-
-The final layer translation is:
-
-```text
-rig.origin + layer.origin + snapped_offset
-```
 
 When the rig entity itself also has a transform, Bevy's normal parent-child transform propagation applies on top.
 
@@ -210,3 +284,5 @@ Texture generators include:
 - layer motion is fully derived from components plus time, not from transient spawn/despawn effects
 - repeat math is symmetric for positive and negative travel
 - segment grids stay centered and odd-sized
+- `ParallaxLayerComputed` is always populated before `WriteTransforms` runs
+- `user_offset` and `user_scale` are purely additive / multiplicative and never affect the computed pipeline

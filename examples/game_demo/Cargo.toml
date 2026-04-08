@@ -1,0 +1,18 @@
+[package]
+name = "saddle-rendering-parallax-scroller-example-game-demo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+e2e = ["dep:saddle-bevy-e2e"]
+
+[dependencies]
+bevy = { workspace = true }
+saddle-rendering-parallax-scroller = { workspace = true }
+saddle-pane = { git = "https://github.com/julien-blanchon/saddle-pane" }
+saddle-bevy-e2e = { git = "https://github.com/julien-blanchon/saddle-bevy-e2e", features = ["json"], optional = true }
+
+[lints]
+workspace = true

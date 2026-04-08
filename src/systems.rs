@@ -12,65 +12,37 @@ use bevy::{
 use crate::{
     ParallaxCameraTarget, ParallaxDebugSettings, ParallaxDiagnostics, ParallaxLayer,
     ParallaxLayerDiagnostics, ParallaxLayerStrategy, ParallaxRig, ParallaxRigDiagnostics,
-    ParallaxTiledSprite,
+    components::{LayerRuntimeState, ManagedSegment, ParallaxLayerComputed, RigRuntimeState},
+    events::{
+        ParallaxActivated, ParallaxDeactivated, ParallaxLayerWrapped, ParallaxSegmentDespawned,
+        ParallaxSegmentSpawned,
+    },
     math::{
         advance_phase, apply_repeat_and_bounds, centered_indices, compute_unbounded_offset,
         coverage_size, perspective_depth_ratio, required_segment_grid,
         resolve_depth_mapped_camera_factor, resolve_depth_mapped_scale, safe_abs_scale,
         snap_offset,
     },
-    resources::ParallaxRuntimeState,
+    resources::{ParallaxRuntimeState, ParallaxTimeScale},
 };
 
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub(crate) struct RigRuntimeState {
-    pub camera_target: Option<Entity>,
-    pub camera_position: Vec2,
-    pub camera_depth: f32,
-    pub camera_is_perspective: bool,
-    pub viewport_size: Vec2,
-}
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
 
-#[derive(Component, Debug, Clone, Copy)]
-pub(crate) struct LayerRuntimeState {
-    pub effective_camera_factor: Vec2,
-    pub effective_scale: Vec2,
-    pub auto_phase: Vec2,
-    pub depth_ratio: Option<f32>,
-    pub effective_offset: Vec2,
-    pub wrap_span: Vec2,
-    pub coverage_size: Vec2,
-    pub segment_grid: UVec2,
-}
-
-impl Default for LayerRuntimeState {
-    fn default() -> Self {
-        Self {
-            effective_camera_factor: Vec2::ZERO,
-            effective_scale: Vec2::ONE,
-            auto_phase: Vec2::ZERO,
-            depth_ratio: None,
-            effective_offset: Vec2::ZERO,
-            wrap_span: Vec2::ZERO,
-            coverage_size: Vec2::ZERO,
-            segment_grid: UVec2::ONE,
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ManagedSegment {
-    pub grid: IVec2,
-}
-
-pub(crate) fn activate_runtime(mut runtime: ResMut<ParallaxRuntimeState>) {
+pub(crate) fn activate_runtime(
+    mut runtime: ResMut<ParallaxRuntimeState>,
+    mut messages: MessageWriter<ParallaxActivated>,
+) {
     runtime.active = true;
+    messages.write(ParallaxActivated);
 }
 
 pub(crate) fn deactivate_runtime(
     mut commands: Commands,
     mut runtime: ResMut<ParallaxRuntimeState>,
     mut diagnostics: ResMut<ParallaxDiagnostics>,
+    mut messages: MessageWriter<ParallaxDeactivated>,
     rigs: Query<Entity, With<ParallaxRig>>,
     layers: Query<Entity, With<ParallaxLayer>>,
     segments: Query<Entity, With<ManagedSegment>>,
@@ -84,17 +56,26 @@ pub(crate) fn deactivate_runtime(
     }
 
     for layer in &layers {
-        commands.entity(layer).remove::<LayerRuntimeState>();
+        commands
+            .entity(layer)
+            .remove::<LayerRuntimeState>()
+            .remove::<ParallaxLayerComputed>();
     }
 
     for segment in &segments {
         commands.entity(segment).despawn();
     }
+
+    messages.write(ParallaxDeactivated);
 }
 
 pub(crate) fn runtime_is_active(runtime: Res<ParallaxRuntimeState>) -> bool {
     runtime.active
 }
+
+// ---------------------------------------------------------------------------
+// Ensure state
+// ---------------------------------------------------------------------------
 
 pub(crate) fn ensure_rig_state(
     mut commands: Commands,
@@ -107,12 +88,24 @@ pub(crate) fn ensure_rig_state(
 
 pub(crate) fn ensure_layer_state(
     mut commands: Commands,
-    layers: Query<Entity, (With<ParallaxLayer>, Without<LayerRuntimeState>)>,
+    layers: Query<
+        Entity,
+        (
+            With<ParallaxLayer>,
+            Or<(Without<LayerRuntimeState>, Without<ParallaxLayerComputed>)>,
+        ),
+    >,
 ) {
     for layer in &layers {
-        commands.entity(layer).insert(LayerRuntimeState::default());
+        commands
+            .entity(layer)
+            .insert((LayerRuntimeState::default(), ParallaxLayerComputed::default()));
     }
 }
+
+// ---------------------------------------------------------------------------
+// TrackCamera
+// ---------------------------------------------------------------------------
 
 pub(crate) fn track_camera_targets(
     transform_helper: TransformHelper,
@@ -172,12 +165,17 @@ pub(crate) fn track_camera_targets(
     }
 }
 
+// ---------------------------------------------------------------------------
+// UpdateOffsets
+// ---------------------------------------------------------------------------
+
 pub(crate) fn advance_layer_phase(
     time: Res<Time>,
+    time_scale: Res<ParallaxTimeScale>,
     rigs: Query<&ParallaxRig>,
     mut layers: Query<(&ChildOf, &ParallaxLayer, &mut LayerRuntimeState), With<ParallaxLayer>>,
 ) {
-    let dt = time.delta_secs();
+    let global_dt = time.delta_secs() * time_scale.0;
     for (child_of, layer, mut runtime) in &mut layers {
         if !layer.enabled {
             continue;
@@ -186,13 +184,17 @@ pub(crate) fn advance_layer_phase(
             if !rig.enabled {
                 continue;
             }
+            let dt = global_dt * rig.speed_multiplier;
+            runtime.auto_phase = advance_phase(runtime.auto_phase, layer.auto_scroll, dt);
         }
-
-        runtime.auto_phase = advance_phase(runtime.auto_phase, layer.auto_scroll, dt);
     }
 }
 
-pub(crate) fn apply_layout(
+// ---------------------------------------------------------------------------
+// ComputeOffsets — writes ParallaxLayerComputed (user hook point follows)
+// ---------------------------------------------------------------------------
+
+pub(crate) fn compute_layer_offsets(
     images: Res<Assets<Image>>,
     rigs: Query<(&ParallaxRig, &RigRuntimeState, &GlobalTransform)>,
     mut layers: Query<
@@ -201,13 +203,14 @@ pub(crate) fn apply_layout(
             &ChildOf,
             &ParallaxLayer,
             &mut LayerRuntimeState,
-            &mut Transform,
-            &mut Sprite,
+            &mut ParallaxLayerComputed,
+            &Sprite,
         ),
         (With<ParallaxLayer>, Without<ManagedSegment>),
     >,
+    mut wrap_messages: MessageWriter<ParallaxLayerWrapped>,
 ) {
-    for (layer_entity, child_of, layer, mut runtime, mut transform, mut sprite) in &mut layers {
+    for (layer_entity, child_of, layer, mut runtime, mut computed, sprite) in &mut layers {
         let Ok((rig, rig_runtime, rig_global_transform)) = rigs.get(child_of.parent()) else {
             continue;
         };
@@ -215,7 +218,7 @@ pub(crate) fn apply_layout(
             continue;
         }
 
-        let source_local_size = resolve_source_local_size(layer, &sprite, &images);
+        let source_local_size = resolve_source_local_size(layer, sprite, &images);
         let depth_ratio = layer.depth_mapping.as_ref().and_then(|depth_mapping| {
             perspective_depth_ratio(
                 rig_runtime.camera_is_perspective,
@@ -256,95 +259,122 @@ pub(crate) fn apply_layout(
             apply_repeat_and_bounds(unbounded_offset, layer.repeat, wrap_span, layer.bounds);
         let snapped_offset = snap_offset(constrained_offset, &layer.snap);
 
+        // Detect wrap events
+        if layer.repeat.x || layer.repeat.y {
+            let diff = (unbounded_offset - constrained_offset).abs();
+            let threshold = wrap_span * 0.01;
+            let wrapped = (layer.repeat.x && diff.x > threshold.x)
+                || (layer.repeat.y && diff.y > threshold.y);
+            if wrapped {
+                wrap_messages.write(ParallaxLayerWrapped {
+                    layer: layer_entity,
+                    rig: child_of.parent(),
+                    offset_before_wrap: unbounded_offset,
+                    offset_after_wrap: constrained_offset,
+                });
+            }
+        }
+
+        // Update runtime state
         runtime.effective_camera_factor = effective_camera_factor;
         runtime.effective_scale = effective_scale;
         runtime.depth_ratio = depth_ratio;
         runtime.effective_offset = snapped_offset;
         runtime.wrap_span = wrap_span;
 
+        // Compute coverage/segment info needed by later phases
+        match &layer.strategy {
+            ParallaxLayerStrategy::TiledSprite(tiled) => {
+                runtime.coverage_size = coverage_size(
+                    resolved_viewport_size,
+                    layer.coverage_margin,
+                    tiled.minimum_coverage,
+                    layer.repeat,
+                    source_world_size,
+                );
+                runtime.segment_grid = UVec2::ONE;
+            }
+            ParallaxLayerStrategy::Segmented(segmented) => {
+                runtime.coverage_size = source_world_size;
+                runtime.segment_grid = required_segment_grid(
+                    resolved_viewport_size + layer.coverage_margin.max(Vec2::ZERO) * 2.0,
+                    source_world_size,
+                    layer.repeat,
+                    segmented.extra_rings,
+                );
+            }
+        }
+
+        // Write computed values — users can modify these before WriteTransforms
+        computed.offset = snapped_offset;
+        computed.scale = effective_scale;
+        computed.depth = layer.depth;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WriteTransforms — reads ParallaxLayerComputed (after user hook)
+// ---------------------------------------------------------------------------
+
+pub(crate) fn write_layer_transforms(
+    rigs: Query<&ParallaxRig>,
+    mut layers: Query<
+        (
+            &ChildOf,
+            &ParallaxLayer,
+            &ParallaxLayerComputed,
+            &LayerRuntimeState,
+            &mut Transform,
+            &mut Sprite,
+        ),
+        (With<ParallaxLayer>, Without<ManagedSegment>),
+    >,
+) {
+    for (child_of, layer, computed, runtime, mut transform, mut sprite) in &mut layers {
+        let Ok(rig) = rigs.get(child_of.parent()) else {
+            continue;
+        };
+        if !rig.enabled {
+            continue;
+        }
+
+        let final_offset = computed.offset + layer.user_offset;
+        let final_scale = computed.scale * layer.user_scale;
+
         transform.translation = Vec3::new(
-            rig.origin.x + layer.origin.x + snapped_offset.x,
-            rig.origin.y + layer.origin.y + snapped_offset.y,
-            layer.depth,
+            rig.origin.x + layer.origin.x + final_offset.x,
+            rig.origin.y + layer.origin.y + final_offset.y,
+            computed.depth,
         );
-        transform.scale = effective_scale.extend(1.0);
+        transform.scale = final_scale.extend(1.0);
+        transform.rotation = Quat::from_rotation_z(layer.rotation);
 
         sprite.color = layer.tint;
 
+        let scale_abs = safe_abs_scale(computed.scale);
         match &layer.strategy {
             ParallaxLayerStrategy::TiledSprite(tiled) => {
-                let _ = layer_entity;
-                apply_tiled_layer(
-                    layer,
-                    tiled,
-                    &mut runtime,
-                    &mut sprite,
-                    source_world_size,
-                    scale_abs,
-                    resolved_viewport_size,
-                );
+                sprite.image_mode = SpriteImageMode::Tiled {
+                    tile_x: layer.repeat.x,
+                    tile_y: layer.repeat.y,
+                    stretch_value: tiled.stretch_value.max(0.0001),
+                };
+                sprite.custom_size = Some(runtime.coverage_size / scale_abs);
             }
-            ParallaxLayerStrategy::Segmented(segmented) => {
-                let _ = layer_entity;
-                apply_segmented_layer(
-                    layer,
-                    segmented,
-                    &mut runtime,
-                    &mut sprite,
-                    source_world_size,
-                    resolved_viewport_size,
-                );
+            ParallaxLayerStrategy::Segmented(_) => {
+                sprite.image_mode = SpriteImageMode::Auto;
+                let source_local_size = sprite
+                    .custom_size
+                    .unwrap_or_else(|| runtime.coverage_size / scale_abs);
                 sprite.custom_size = Some(source_local_size);
             }
         }
     }
 }
 
-fn apply_tiled_layer(
-    layer: &ParallaxLayer,
-    tiled: &ParallaxTiledSprite,
-    runtime: &mut Mut<LayerRuntimeState>,
-    sprite: &mut Mut<Sprite>,
-    source_world_size: Vec2,
-    scale_abs: Vec2,
-    viewport_size: Vec2,
-) {
-    sprite.image_mode = SpriteImageMode::Tiled {
-        tile_x: layer.repeat.x,
-        tile_y: layer.repeat.y,
-        stretch_value: tiled.stretch_value.max(0.0001),
-    };
-
-    let coverage_world = coverage_size(
-        viewport_size,
-        layer.coverage_margin,
-        tiled.minimum_coverage,
-        layer.repeat,
-        source_world_size,
-    );
-    runtime.coverage_size = coverage_world;
-    runtime.segment_grid = UVec2::ONE;
-    sprite.custom_size = Some(coverage_world / scale_abs);
-}
-
-fn apply_segmented_layer(
-    layer: &ParallaxLayer,
-    segmented: &crate::ParallaxSegmented,
-    runtime: &mut Mut<LayerRuntimeState>,
-    sprite: &mut Mut<Sprite>,
-    source_world_size: Vec2,
-    viewport_size: Vec2,
-) {
-    sprite.image_mode = SpriteImageMode::Auto;
-
-    runtime.coverage_size = source_world_size;
-    runtime.segment_grid = required_segment_grid(
-        viewport_size + layer.coverage_margin.max(Vec2::ZERO) * 2.0,
-        source_world_size,
-        layer.repeat,
-        segmented.extra_rings,
-    );
-}
+// ---------------------------------------------------------------------------
+// Segment child management
+// ---------------------------------------------------------------------------
 
 pub(crate) fn sync_segment_children(
     mut commands: Commands,
@@ -368,6 +398,8 @@ pub(crate) fn sync_segment_children(
         ),
         (With<ManagedSegment>, Without<ParallaxLayer>),
     >,
+    mut spawn_messages: MessageWriter<ParallaxSegmentSpawned>,
+    mut despawn_messages: MessageWriter<ParallaxSegmentDespawned>,
 ) {
     let mut existing = HashMap::<Entity, HashMap<IVec2, Entity>>::new();
     for (entity, managed, child_of, _, _) in &segments {
@@ -392,6 +424,10 @@ pub(crate) fn sync_segment_children(
                 for (grid, entity) in &existing_for_layer {
                     if !desired_set.contains(grid) {
                         commands.entity(*entity).despawn();
+                        despawn_messages.write(ParallaxSegmentDespawned {
+                            layer: layer_entity,
+                            grid: *grid,
+                        });
                     }
                 }
 
@@ -436,13 +472,23 @@ pub(crate) fn sync_segment_children(
                         if let Some(render_layers) = render_layers.cloned() {
                             child.insert(render_layers);
                         }
+
+                        spawn_messages.write(ParallaxSegmentSpawned {
+                            segment: child.id(),
+                            layer: layer_entity,
+                            grid,
+                        });
                     }
                 }
             }
             ParallaxLayerStrategy::TiledSprite(_) => {
                 if let Some(existing_for_layer) = existing.remove(&layer_entity) {
-                    for (_, entity) in existing_for_layer {
+                    for (grid, entity) in existing_for_layer {
                         commands.entity(entity).despawn();
+                        despawn_messages.write(ParallaxSegmentDespawned {
+                            layer: layer_entity,
+                            grid,
+                        });
                     }
                 }
             }
@@ -453,8 +499,12 @@ pub(crate) fn sync_segment_children(
         if desired_by_layer.contains_key(&layer_entity) {
             continue;
         }
-        for (_, entity) in existing_for_layer {
+        for (grid, entity) in existing_for_layer {
             commands.entity(entity).despawn();
+            despawn_messages.write(ParallaxSegmentDespawned {
+                layer: layer_entity,
+                grid,
+            });
         }
     }
 }
@@ -492,6 +542,10 @@ fn resolve_source_local_size(
         .map(|size| size.as_vec2().max(Vec2::splat(0.0001)))
         .unwrap_or(Vec2::ONE)
 }
+
+// ---------------------------------------------------------------------------
+// Diagnostics
+// ---------------------------------------------------------------------------
 
 pub(crate) fn publish_diagnostics(
     runtime: Res<ParallaxRuntimeState>,
@@ -541,6 +595,10 @@ pub(crate) fn publish_diagnostics(
         rig.layers.sort_by_key(|entry| entry.layer.index());
     }
 }
+
+// ---------------------------------------------------------------------------
+// Debug gizmos
+// ---------------------------------------------------------------------------
 
 pub(crate) fn draw_debug_gizmos(
     debug: Res<ParallaxDebugSettings>,

@@ -6,8 +6,8 @@ use bevy::{
 use saddle_pane::prelude::*;
 
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer, ParallaxLayerBundle,
-    ParallaxLayerStrategy, ParallaxRig, ParallaxRigBundle, ParallaxSegmented, ParallaxSnap,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer,
+    ParallaxLayerStrategy, ParallaxRig, ParallaxSegmented, ParallaxSnap,
 };
 
 pub const WINDOW_SIZE: (u32, u32) = (1280, 720);
@@ -761,11 +761,8 @@ pub fn spawn_demo_rig(commands: &mut Commands, camera: Entity, name: &str, origi
     commands
         .spawn((
             Name::new(name.to_string()),
-            ParallaxRigBundle {
-                rig: ParallaxRig::default(),
-                transform: Transform::from_translation(origin),
-                ..default()
-            },
+            ParallaxRig::default(),
+            Transform::from_translation(origin),
             ParallaxCameraTarget::new(camera),
         ))
         .id()
@@ -782,11 +779,8 @@ pub fn spawn_tiled_layer(
         .spawn((
             Name::new(name.to_string()),
             ChildOf(rig),
-            ParallaxLayerBundle {
-                layer,
-                sprite: Sprite::from_image(image),
-                ..default()
-            },
+            layer,
+            Sprite::from_image(image),
         ))
         .id()
 }

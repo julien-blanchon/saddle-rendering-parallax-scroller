@@ -4,8 +4,9 @@ use bevy::{
 };
 
 use saddle_rendering_parallax_scroller::{
-    ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer, ParallaxLayerStrategy, ParallaxRig,
-    ParallaxRigBundle, ParallaxScrollerPlugin, ParallaxScrollerSystems, ParallaxSegmented,
+    LayerRuntimeState, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer,
+    ParallaxLayerComputed, ParallaxLayerStrategy, ParallaxRig, ParallaxScrollerPlugin,
+    ParallaxScrollerSystems, ParallaxSegmented, ParallaxTimeScale, RigRuntimeState,
 };
 
 #[derive(ScheduleLabel, Debug, Clone, PartialEq, Eq, Hash)]
@@ -26,7 +27,7 @@ fn app() -> App {
     app.init_asset::<Image>();
     app.configure_sets(
         Tick,
-        ParallaxScrollerSystems::TrackCamera.before(ParallaxScrollerSystems::ApplyLayout),
+        ParallaxScrollerSystems::TrackCamera.before(ParallaxScrollerSystems::ComputeOffsets),
     );
     app.add_plugins(ParallaxScrollerPlugin::new(Activate, Deactivate, Tick));
     app
@@ -145,10 +146,7 @@ fn unbound_rig_uses_zero_camera_input_instead_of_reusing_parent_translation() {
 
     let rig = app
         .world_mut()
-        .spawn(ParallaxRigBundle {
-            transform: Transform::from_xyz(48.0, -20.0, 0.0),
-            ..default()
-        })
+        .spawn((ParallaxRig::default(), Transform::from_xyz(48.0, -20.0, 0.0)))
         .id();
     let layer = app
         .world_mut()
@@ -271,4 +269,141 @@ fn render_layer_changes_propagate_to_segment_children() {
     for child in child_entities(app.world_mut(), layer) {
         assert!(app.world().entity(child).get::<RenderLayers>().is_none());
     }
+}
+
+#[test]
+fn custom_offset_hook_can_modify_computed_before_write() {
+    let mut app = app();
+    let image = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        images.add(white_image())
+    };
+
+    let rig = app.world_mut().spawn(ParallaxRig::default()).id();
+    let layer = app
+        .world_mut()
+        .spawn((
+            Name::new("Layer"),
+            ChildOf(rig),
+            Sprite::from_image(image),
+            ParallaxLayer::default()
+                .with_source_size(Vec2::new(16.0, 16.0))
+                .with_phase(Vec2::new(7.0, 0.0)),
+        ))
+        .id();
+
+    // Inject a system between ComputeOffsets and WriteTransforms
+    app.add_systems(
+        Tick,
+        (|mut query: Query<&mut ParallaxLayerComputed>| {
+            for mut computed in &mut query {
+                computed.offset.x += 50.0;
+            }
+        })
+        .after(ParallaxScrollerSystems::ComputeOffsets)
+        .before(ParallaxScrollerSystems::WriteTransforms),
+    );
+
+    app.world_mut().run_schedule(Activate);
+    app.world_mut().run_schedule(Tick);
+
+    let transform = app.world().entity(layer).get::<Transform>().unwrap();
+    // phase(7) + hook(50) = 57
+    assert!((transform.translation.x - 57.0).abs() < 0.001);
+}
+
+#[test]
+fn user_offset_and_user_scale_are_additive() {
+    let mut app = app();
+    let image = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        images.add(white_image())
+    };
+
+    let rig = app.world_mut().spawn(ParallaxRig::default()).id();
+    let layer = app
+        .world_mut()
+        .spawn((
+            Name::new("Layer"),
+            ChildOf(rig),
+            Sprite::from_image(image),
+            ParallaxLayer {
+                phase: Vec2::new(3.0, 0.0),
+                user_offset: Vec2::new(5.0, -3.0),
+                user_scale: Vec2::new(2.0, 3.0),
+                source_size: Some(Vec2::new(16.0, 16.0)),
+                repeat: saddle_rendering_parallax_scroller::ParallaxAxes::none(),
+                ..default()
+            },
+        ))
+        .id();
+
+    app.world_mut().run_schedule(Activate);
+    app.world_mut().run_schedule(Tick);
+
+    let t = app.world().entity(layer).get::<Transform>().unwrap();
+    assert!((t.translation.x - 8.0).abs() < 0.001); // phase(3) + user_offset(5) = 8
+    assert!((t.translation.y + 3.0).abs() < 0.001); // 0 + (-3)
+    assert!((t.scale.x - 2.0).abs() < 0.001); // 1 * 2
+    assert!((t.scale.y - 3.0).abs() < 0.001); // 1 * 3
+}
+
+#[test]
+fn time_scale_zero_freezes_auto_scroll() {
+    let mut app = app();
+    let image = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        images.add(white_image())
+    };
+
+    let rig = app.world_mut().spawn(ParallaxRig::default()).id();
+    let layer = app
+        .world_mut()
+        .spawn((
+            Name::new("Layer"),
+            ChildOf(rig),
+            Sprite::from_image(image),
+            ParallaxLayer {
+                auto_scroll: Vec2::new(999.0, 0.0),
+                source_size: Some(Vec2::new(16.0, 16.0)),
+                ..default()
+            },
+        ))
+        .id();
+
+    app.world_mut().resource_mut::<ParallaxTimeScale>().0 = 0.0;
+
+    app.world_mut().run_schedule(Activate);
+    app.world_mut().run_schedule(Tick);
+
+    let runtime = app.world().entity(layer).get::<LayerRuntimeState>().unwrap();
+    assert_eq!(runtime.auto_phase, Vec2::ZERO);
+}
+
+#[test]
+fn runtime_state_is_publicly_accessible() {
+    let mut app = app();
+    let image = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        images.add(white_image())
+    };
+
+    let rig = app.world_mut().spawn(ParallaxRig::default()).id();
+    let layer = app
+        .world_mut()
+        .spawn((
+            Name::new("Layer"),
+            ChildOf(rig),
+            Sprite::from_image(image),
+            ParallaxLayer::default().with_source_size(Vec2::new(16.0, 16.0)),
+        ))
+        .id();
+
+    app.world_mut().run_schedule(Activate);
+    app.world_mut().run_schedule(Tick);
+
+    // Public API: can query RigRuntimeState and LayerRuntimeState
+    let _rig_state: &RigRuntimeState = app.world().entity(rig).get().unwrap();
+    let _layer_state: &LayerRuntimeState = app.world().entity(layer).get().unwrap();
+    let _computed: &ParallaxLayerComputed = app.world().entity(layer).get().unwrap();
 }

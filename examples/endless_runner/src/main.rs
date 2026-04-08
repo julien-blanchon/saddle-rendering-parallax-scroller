@@ -15,7 +15,7 @@ use bevy::prelude::*;
 
 use common::{configure_app, demo_textures};
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxRig, ParallaxRigBundle,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxRig,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
 
@@ -52,14 +52,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let rig = commands
         .spawn((
             Name::new("Runner Parallax Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();

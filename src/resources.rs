@@ -8,6 +8,20 @@ pub(crate) struct ParallaxRuntimeState {
     pub active: bool,
 }
 
+/// Global time-scale multiplier for parallax auto-scroll.
+///
+/// `0.0` = paused, `1.0` = normal, `2.0` = double speed.
+/// Applied on top of per-rig `speed_multiplier`.
+#[derive(Resource, Debug, Clone, Copy, Reflect)]
+#[reflect(Resource, Debug, Default)]
+pub struct ParallaxTimeScale(pub f32);
+
+impl Default for ParallaxTimeScale {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
 #[derive(Resource, Debug, Clone, Reflect)]
 #[reflect(Resource, Debug, Default)]
 pub struct ParallaxDebugSettings {

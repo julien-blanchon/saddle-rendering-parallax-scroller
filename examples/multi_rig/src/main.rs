@@ -10,8 +10,8 @@ use bevy::prelude::*;
 
 use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle, ParallaxLayerStrategy,
-    ParallaxRig, ParallaxRigBundle, ParallaxSegmented,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerStrategy, ParallaxRig,
+    ParallaxSegmented,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
 
@@ -51,14 +51,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let forest = commands
         .spawn((
             Name::new("Forest Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();
@@ -67,67 +65,58 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         Name::new("Forest Sky"),
         ChildOf(forest),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::ONE,
-                repeat: ParallaxAxes::both(),
-                coverage_margin: Vec2::new(96.0, 48.0),
-                tint: Color::srgba(0.95, 0.98, 1.0, 0.92),
-                scale: Vec2::splat(2.0),
-                origin: Vec2::new(0.0, 24.0),
-                depth: 0.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.sky.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::ONE,
+            repeat: ParallaxAxes::both(),
+            coverage_margin: Vec2::new(96.0, 48.0),
+            tint: Color::srgba(0.95, 0.98, 1.0, 0.92),
+            scale: Vec2::splat(2.0),
+            origin: Vec2::new(0.0, 24.0),
+            depth: 0.0,
             ..default()
         },
+        Sprite::from_image(textures.sky.clone()),
     ));
 
     // Forest mountains
     commands.spawn((
         Name::new("Forest Mountains"),
         ChildOf(forest),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                strategy: ParallaxLayerStrategy::Segmented(ParallaxSegmented::default()),
-                camera_factor: Vec2::new(0.84, 1.0),
-                repeat: ParallaxAxes::horizontal(),
-                origin: Vec2::new(0.0, -96.0),
-                depth: 1.0,
-                scale: Vec2::splat(1.4),
-                tint: Color::srgb(0.34, 0.47, 0.56),
-                source_size: Some(Vec2::new(320.0, 96.0)),
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.mountains.clone()),
+        ParallaxLayer {
+            enabled: true,
+            strategy: ParallaxLayerStrategy::Segmented(ParallaxSegmented::default()),
+            camera_factor: Vec2::new(0.84, 1.0),
+            repeat: ParallaxAxes::horizontal(),
+            origin: Vec2::new(0.0, -96.0),
+            depth: 1.0,
+            scale: Vec2::splat(1.4),
+            tint: Color::srgb(0.34, 0.47, 0.56),
+            source_size: Some(Vec2::new(320.0, 96.0)),
             ..default()
         },
+        Sprite::from_image(textures.mountains.clone()),
     ));
 
     // Forest canopy
     commands.spawn((
         Name::new("Forest Canopy"),
         ChildOf(forest),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                strategy: ParallaxLayerStrategy::Segmented(ParallaxSegmented {
-                    extra_rings: UVec2::new(2, 0),
-                }),
-                camera_factor: Vec2::new(1.08, 1.0),
-                repeat: ParallaxAxes::horizontal(),
-                origin: Vec2::new(0.0, -200.0),
-                depth: 2.0,
-                scale: Vec2::new(1.5, 2.0),
-                tint: Color::srgb(0.14, 0.28, 0.14),
-                source_size: Some(Vec2::new(256.0, 64.0)),
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.canopy.clone()),
+        ParallaxLayer {
+            enabled: true,
+            strategy: ParallaxLayerStrategy::Segmented(ParallaxSegmented {
+                extra_rings: UVec2::new(2, 0),
+            }),
+            camera_factor: Vec2::new(1.08, 1.0),
+            repeat: ParallaxAxes::horizontal(),
+            origin: Vec2::new(0.0, -200.0),
+            depth: 2.0,
+            scale: Vec2::new(1.5, 2.0),
+            tint: Color::srgb(0.14, 0.28, 0.14),
+            source_size: Some(Vec2::new(256.0, 64.0)),
             ..default()
         },
+        Sprite::from_image(textures.canopy.clone()),
     ));
 
     // -----------------------------------------------------------------------
@@ -136,14 +125,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let space = commands
         .spawn((
             Name::new("Space Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::new(0.0, 260.0, 0.0)),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::new(0.0, 260.0, 0.0)),
             ParallaxCameraTarget::new(camera),
         ))
         .id();
@@ -152,41 +139,35 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         Name::new("Starfield"),
         ChildOf(space),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::ONE,
-                auto_scroll: Vec2::new(-12.0, -48.0),
-                repeat: ParallaxAxes::both(),
-                scale: Vec2::splat(2.0),
-                coverage_margin: Vec2::new(80.0, 80.0),
-                tint: Color::srgba(1.0, 1.0, 1.0, 0.95),
-                depth: 0.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.stars.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::ONE,
+            auto_scroll: Vec2::new(-12.0, -48.0),
+            repeat: ParallaxAxes::both(),
+            scale: Vec2::splat(2.0),
+            coverage_margin: Vec2::new(80.0, 80.0),
+            tint: Color::srgba(1.0, 1.0, 1.0, 0.95),
+            depth: 0.0,
             ..default()
         },
+        Sprite::from_image(textures.stars.clone()),
     ));
 
     // Space cloud bands
     commands.spawn((
         Name::new("Cloud Bands"),
         ChildOf(space),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                camera_factor: Vec2::ONE,
-                auto_scroll: Vec2::new(18.0, -12.0),
-                repeat: ParallaxAxes::both(),
-                scale: Vec2::splat(3.0),
-                tint: Color::srgba(0.68, 0.86, 1.0, 0.22),
-                phase: Vec2::new(60.0, 40.0),
-                depth: 1.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.pixel_clouds.clone()),
+        ParallaxLayer {
+            enabled: true,
+            camera_factor: Vec2::ONE,
+            auto_scroll: Vec2::new(18.0, -12.0),
+            repeat: ParallaxAxes::both(),
+            scale: Vec2::splat(3.0),
+            tint: Color::srgba(0.68, 0.86, 1.0, 0.22),
+            phase: Vec2::new(60.0, 40.0),
+            depth: 1.0,
             ..default()
         },
+        Sprite::from_image(textures.pixel_clouds.clone()),
     ));
 }

@@ -13,7 +13,7 @@
 use bevy::prelude::*;
 
 use common::{DemoCamera, add_rich_forest_stack, configure_app, demo_textures, update_demo_camera};
-use saddle_rendering_parallax_scroller::{ParallaxCameraTarget, ParallaxRig, ParallaxRigBundle};
+use saddle_rendering_parallax_scroller::{ParallaxCameraTarget, ParallaxRig};
 use saddle_rendering_parallax_scroller_example_common as common;
 
 fn main() {
@@ -50,14 +50,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let rig = commands
         .spawn((
             Name::new("Forest Parallax Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();

@@ -6,6 +6,7 @@
 |-------|------|---------|--------|
 | `enabled` | `bool` | `true` | Freezes camera tracking and layer layout for the rig when `false` |
 | `origin` | `Vec2` | `Vec2::ZERO` | Extra rig-local translation added to every child layer |
+| `speed_multiplier` | `f32` | `1.0` | Multiplies auto-scroll dt for all child layers. `0.0` = frozen, `2.0` = double speed. Does not affect camera-factor |
 
 ## `ParallaxCameraTarget`
 
@@ -32,6 +33,9 @@
 | `scale` | `Vec2` | `Vec2::ONE` | Written to `Transform.scale.xy`; affects rendered size and wrap span |
 | `tint` | `Color` | `Color::WHITE` | Written to `Sprite.color` |
 | `strategy` | `ParallaxLayerStrategy` | `TiledSprite` | Chooses tiling vs segment cloning |
+| `user_offset` | `Vec2` | `Vec2::ZERO` | Added on top of the computed parallax offset during `WriteTransforms` |
+| `user_scale` | `Vec2` | `Vec2::ONE` | Multiplied on top of the computed parallax scale during `WriteTransforms` |
+| `rotation` | `f32` | `0.0` | Rotation in radians around Z axis, written to `Transform.rotation` |
 
 ### Builder Methods
 
@@ -55,6 +59,9 @@ ParallaxLayer::segmented()       // default segmented strategy
     .with_coverage_margin(Vec2)
     .with_enabled(bool)
     .with_strategy(ParallaxLayerStrategy)
+    .with_user_offset(Vec2)
+    .with_user_scale(Vec2)
+    .with_rotation(f32)
 ```
 
 ## `ParallaxDepthMapping`
@@ -218,3 +225,75 @@ For camera-follow parallax (no auto-scroll):
 - Use `camera_factor` values from 0.1 (far) to 0.95 (near) for depth
 
 See `platformer_demo` for a complete WASD + jump implementation.
+
+### Custom Offset Effects
+
+For wobble, shake, or event-driven offsets, use the `ComputeOffsets`/`WriteTransforms` hook:
+
+1. Add a system `after(ComputeOffsets).before(WriteTransforms)` that modifies `ParallaxLayerComputed`
+2. Or use `user_offset` / `user_scale` on `ParallaxLayer` for simpler additive effects
+
+See `custom_offset` example for wobble, shake, and burst implementations.
+
+### Endless Runner Speed Ramp
+
+- Set `auto_scroll` on each layer for base speed
+- Use `ParallaxRig::speed_multiplier` to increase difficulty over time
+- Camera-factor ratios stay unchanged; only auto-scroll rates scale
+
+See `speed_ramp` example.
+
+### Pause / Slow-Mo
+
+- Set `ParallaxTimeScale(0.0)` to freeze all auto-scroll globally
+- Set `ParallaxTimeScale(0.25)` for slow-motion
+- Use `ParallaxRig::speed_multiplier = 0.0` to freeze a specific rig
+
+See `time_control` example.
+
+## `ParallaxTimeScale`
+
+Global resource controlling auto-scroll time.
+
+| Field | Type | Default | Effect |
+|-------|------|---------|--------|
+| `0` | `f32` | `1.0` | Multiplies `dt` for all auto-scroll accumulation. `0.0` = paused, `1.0` = normal |
+
+Applied on top of per-rig `speed_multiplier`: `effective_dt = delta_secs * time_scale * rig.speed_multiplier`.
+
+## `ParallaxLayerComputed`
+
+Intermediate component written by `ComputeOffsets`, read by `WriteTransforms`. This is the hook point for custom offset logic.
+
+| Field | Type | Default | Effect |
+|-------|------|---------|--------|
+| `offset` | `Vec2` | `Vec2::ZERO` | Computed parallax offset (before `user_offset` is added) |
+| `scale` | `Vec2` | `Vec2::ONE` | Computed effective scale (before `user_scale` is multiplied) |
+| `depth` | `f32` | `0.0` | Layer depth, passed through for convenience |
+
+## `RigRuntimeState`
+
+Public per-rig component populated by `TrackCamera`. Read-only for consumers.
+
+| Field | Type | Effect |
+|-------|------|--------|
+| `camera_target` | `Option<Entity>` | Resolved camera entity |
+| `camera_position` | `Vec2` | Camera world position (2D) |
+| `camera_depth` | `f32` | Camera Z depth |
+| `camera_is_perspective` | `bool` | Whether the camera uses perspective projection |
+| `viewport_size` | `Vec2` | Viewport size in world units |
+
+## `LayerRuntimeState`
+
+Public per-layer component populated by `ComputeOffsets`. Read-only for consumers.
+
+| Field | Type | Effect |
+|-------|------|--------|
+| `effective_camera_factor` | `Vec2` | Final camera factor after depth mapping |
+| `effective_scale` | `Vec2` | Final scale after depth mapping |
+| `auto_phase` | `Vec2` | Accumulated auto-scroll offset |
+| `depth_ratio` | `Option<f32>` | Perspective depth ratio (if applicable) |
+| `effective_offset` | `Vec2` | Final snapped offset |
+| `wrap_span` | `Vec2` | One-tile/segment world size for wrapping |
+| `coverage_size` | `Vec2` | Total coverage area |
+| `segment_grid` | `UVec2` | Segment grid dimensions |

@@ -8,26 +8,51 @@ use bevy::{
 mod bundle;
 mod components;
 mod config;
+mod events;
 mod math;
 mod resources;
 mod systems;
 
+#[allow(deprecated)]
 pub use bundle::{ParallaxLayerBundle, ParallaxRigBundle};
-pub use components::{ParallaxCameraTarget, ParallaxLayer, ParallaxRig};
+pub use components::{
+    LayerRuntimeState, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerComputed, ParallaxRig,
+    RigRuntimeState,
+};
 pub use config::{
     AxisRange, ParallaxAxes, ParallaxBounds, ParallaxDepthMapping, ParallaxLayerStrategy,
     ParallaxSegmented, ParallaxSnap, ParallaxStrategyKind, ParallaxTiledSprite,
 };
+pub use events::{
+    ParallaxActivated, ParallaxDeactivated, ParallaxLayerWrapped, ParallaxSegmentDespawned,
+    ParallaxSegmentSpawned,
+};
 pub use resources::{
     ParallaxDebugSettings, ParallaxDiagnostics, ParallaxLayerDiagnostics, ParallaxRigDiagnostics,
+    ParallaxTimeScale,
 };
 
+/// Public system sets for ordering user systems relative to the parallax pipeline.
+///
+/// The default chain is:
+/// `TrackCamera → UpdateOffsets → ComputeOffsets → WriteTransforms → Diagnostics → Debug`
+///
+/// **Custom offset hook**: schedule your systems
+/// `after(ComputeOffsets).before(WriteTransforms)` to mutate
+/// [`ParallaxLayerComputed`] before transforms are written.
 #[derive(SystemSet, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ParallaxScrollerSystems {
+    /// Resolves bound camera position, viewport size, projection type.
     TrackCamera,
+    /// Accumulates auto-scroll phase per layer.
     UpdateOffsets,
-    ApplyLayout,
+    /// Computes parallax offsets and writes [`ParallaxLayerComputed`].
+    ComputeOffsets,
+    /// Reads [`ParallaxLayerComputed`] + user overrides and writes `Transform` / `Sprite`.
+    WriteTransforms,
+    /// Publishes runtime state to [`ParallaxDiagnostics`].
     Diagnostics,
+    /// Draws debug gizmos when enabled.
     Debug,
 }
 
@@ -73,6 +98,12 @@ impl Plugin for ParallaxScrollerPlugin {
         app.init_resource::<resources::ParallaxRuntimeState>()
             .init_resource::<ParallaxDebugSettings>()
             .init_resource::<ParallaxDiagnostics>()
+            .init_resource::<ParallaxTimeScale>()
+            .add_message::<ParallaxLayerWrapped>()
+            .add_message::<ParallaxSegmentSpawned>()
+            .add_message::<ParallaxSegmentDespawned>()
+            .add_message::<ParallaxActivated>()
+            .add_message::<ParallaxDeactivated>()
             .register_type::<AxisRange>()
             .register_type::<ParallaxAxes>()
             .register_type::<ParallaxBounds>()
@@ -81,6 +112,7 @@ impl Plugin for ParallaxScrollerPlugin {
             .register_type::<ParallaxDiagnostics>()
             .register_type::<ParallaxDepthMapping>()
             .register_type::<ParallaxLayer>()
+            .register_type::<ParallaxLayerComputed>()
             .register_type::<ParallaxLayerDiagnostics>()
             .register_type::<ParallaxLayerStrategy>()
             .register_type::<ParallaxRig>()
@@ -88,7 +120,10 @@ impl Plugin for ParallaxScrollerPlugin {
             .register_type::<ParallaxSegmented>()
             .register_type::<ParallaxSnap>()
             .register_type::<ParallaxStrategyKind>()
+            .register_type::<ParallaxTimeScale>()
             .register_type::<ParallaxTiledSprite>()
+            .register_type::<RigRuntimeState>()
+            .register_type::<LayerRuntimeState>()
             .add_systems(self.activate_schedule, systems::activate_runtime)
             .add_systems(self.deactivate_schedule, systems::deactivate_runtime)
             .configure_sets(
@@ -96,7 +131,8 @@ impl Plugin for ParallaxScrollerPlugin {
                 (
                     ParallaxScrollerSystems::TrackCamera,
                     ParallaxScrollerSystems::UpdateOffsets,
-                    ParallaxScrollerSystems::ApplyLayout,
+                    ParallaxScrollerSystems::ComputeOffsets,
+                    ParallaxScrollerSystems::WriteTransforms,
                     ParallaxScrollerSystems::Diagnostics,
                     ParallaxScrollerSystems::Debug,
                 )
@@ -118,9 +154,15 @@ impl Plugin for ParallaxScrollerPlugin {
             )
             .add_systems(
                 self.update_schedule,
-                (systems::apply_layout, systems::sync_segment_children)
+                systems::compute_layer_offsets
+                    .in_set(ParallaxScrollerSystems::ComputeOffsets)
+                    .run_if(systems::runtime_is_active),
+            )
+            .add_systems(
+                self.update_schedule,
+                (systems::write_layer_transforms, systems::sync_segment_children)
                     .chain()
-                    .in_set(ParallaxScrollerSystems::ApplyLayout)
+                    .in_set(ParallaxScrollerSystems::WriteTransforms)
                     .run_if(systems::runtime_is_active),
             )
             .add_systems(

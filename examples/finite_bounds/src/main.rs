@@ -9,8 +9,7 @@ use bevy::prelude::*;
 
 use common::{DemoCamera, configure_app, demo_textures, update_demo_camera};
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxBounds, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerBundle,
-    ParallaxRig, ParallaxRigBundle,
+    ParallaxAxes, ParallaxBounds, ParallaxCameraTarget, ParallaxLayer, ParallaxRig,
 };
 use saddle_rendering_parallax_scroller_example_common as common;
 
@@ -48,14 +47,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let rig = commands
         .spawn((
             Name::new("Finite Bounds Rig"),
-            ParallaxRigBundle {
-                rig: ParallaxRig {
-                    enabled: true,
-                    origin: Vec2::ZERO,
-                },
-                transform: Transform::from_translation(Vec3::ZERO),
+            ParallaxRig {
+                enabled: true,
+                origin: Vec2::ZERO,
                 ..default()
             },
+            Transform::from_translation(Vec3::ZERO),
             ParallaxCameraTarget::new(camera),
         ))
         .id();
@@ -65,21 +62,18 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn((
         Name::new("Finite Vista"),
         ChildOf(rig),
-        ParallaxLayerBundle {
-            layer: ParallaxLayer {
-                enabled: true,
-                repeat: ParallaxAxes::none(),
-                bounds: ParallaxBounds::horizontal(-160.0, 160.0),
-                camera_factor: Vec2::new(0.88, 1.0),
-                origin: Vec2::new(0.0, -40.0),
-                scale: Vec2::ONE,
-                tint: Color::WHITE,
-                source_size: Some(Vec2::new(640.0, 220.0)),
-                depth: 0.0,
-                ..default()
-            },
-            sprite: Sprite::from_image(textures.vista.clone()),
+        ParallaxLayer {
+            enabled: true,
+            repeat: ParallaxAxes::none(),
+            bounds: ParallaxBounds::horizontal(-160.0, 160.0),
+            camera_factor: Vec2::new(0.88, 1.0),
+            origin: Vec2::new(0.0, -40.0),
+            scale: Vec2::ONE,
+            tint: Color::WHITE,
+            source_size: Some(Vec2::new(640.0, 220.0)),
+            depth: 0.0,
             ..default()
         },
+        Sprite::from_image(textures.vista.clone()),
     ));
 }
