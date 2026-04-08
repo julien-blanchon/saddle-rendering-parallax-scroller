@@ -28,8 +28,9 @@ use bevy::{
 };
 use saddle_pane::prelude::*;
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerComputed, ParallaxLayerStrategy,
-    ParallaxRig, ParallaxScrollerSystems, ParallaxSegmented, ParallaxTimeScale,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxLayer, ParallaxLayerComputed,
+    ParallaxLayerStrategy, ParallaxRig, ParallaxScrollerSystems, ParallaxSegmented,
+    ParallaxTimeScale,
 };
 
 // ---------------------------------------------------------------------------
@@ -362,10 +363,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // A tall strip covers everything below that.
     commands.spawn((
         Name::new("Underground"),
-        Sprite::from_color(
-            Color::srgb(0.28, 0.20, 0.13),
-            Vec2::new(100_000.0, 800.0),
-        ),
+        Sprite::from_color(Color::srgb(0.28, 0.20, 0.13), Vec2::new(100_000.0, 800.0)),
         Transform::from_xyz(0.0, -160.0 - 400.0, 7.0),
     ));
 

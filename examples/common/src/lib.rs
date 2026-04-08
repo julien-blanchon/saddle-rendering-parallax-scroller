@@ -6,8 +6,8 @@ use bevy::{
 use saddle_pane::prelude::*;
 
 use saddle_rendering_parallax_scroller::{
-    ParallaxAxes, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer,
-    ParallaxLayerStrategy, ParallaxRig, ParallaxSegmented, ParallaxSnap,
+    ParallaxAxes, ParallaxCameraTarget, ParallaxDiagnostics, ParallaxLayer, ParallaxLayerStrategy,
+    ParallaxRig, ParallaxSegmented, ParallaxSnap,
 };
 
 pub const WINDOW_SIZE: (u32, u32) = (1280, 720);

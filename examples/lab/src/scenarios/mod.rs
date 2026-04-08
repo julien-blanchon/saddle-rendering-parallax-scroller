@@ -1,5 +1,9 @@
 use bevy::prelude::*;
-use saddle_bevy_e2e::{action::Action, actions::assertions, scenario::Scenario};
+use saddle_bevy_e2e::{
+    action::Action,
+    actions::{assertions, inspect},
+    scenario::Scenario,
+};
 use saddle_rendering_parallax_scroller::{
     LayerRuntimeState, ParallaxDepthMapping, ParallaxDiagnostics, ParallaxLayer,
     ParallaxLayerComputed, ParallaxRig, ParallaxTimeScale, RigRuntimeState,
@@ -136,6 +140,9 @@ fn smoke() -> Scenario {
                     && layer.coverage_size.y >= rig.viewport_size.y
             })
         }))
+        .then(inspect::log_resource::<ParallaxDiagnostics>(
+            "parallax smoke diagnostics",
+        ))
         .then(Action::Screenshot("parallax_smoke".into()))
         .then(Action::WaitFrames(1))
         .then(assertions::log_summary("parallax_scroller_smoke"))
@@ -295,7 +302,9 @@ fn pixel_snap() -> Scenario {
             match (snapped, unsnapped) {
                 (Some(snapped), Some(unsnapped)) => {
                     snapped.effective_offset.x.fract().abs() < 0.001
-                        && unsnapped.effective_offset.x.fract().abs() > 0.05
+                        && snapped.effective_offset.y.fract().abs() < 0.001
+                        && (unsnapped.effective_offset.x.fract().abs() > 0.05
+                            || unsnapped.effective_offset.y.fract().abs() > 0.05)
                 }
                 _ => false,
             }
@@ -726,7 +735,9 @@ fn stress_layer_count() -> Scenario {
         .then(Action::Custom(Box::new(|world| {
             let diag = world.resource::<ParallaxDiagnostics>();
             let total = diag.rigs.iter().map(|rig| rig.layers.len()).sum();
-            world.insert_resource(StressLayerSnapshot { total_layers: total });
+            world.insert_resource(StressLayerSnapshot {
+                total_layers: total,
+            });
         })))
         .then(Action::Screenshot("stress_layers_start".into()))
         .then(Action::WaitFrames(1))
@@ -826,6 +837,7 @@ fn layer_toggle() -> Scenario {
                     .find(|(_, layer)| layer.layer == mountain)
                     .is_some_and(|(rig, layer)| {
                         layer.coverage_size.x >= rig.viewport_size.x
+                            && layer.coverage_size.y >= rig.viewport_size.y
                     })
             },
         ))
@@ -839,11 +851,6 @@ fn layer_toggle() -> Scenario {
 // New feature scenarios
 // ---------------------------------------------------------------------------
 
-#[derive(Resource, Clone, Copy)]
-struct ComputedSnapshot {
-    offset: Vec2,
-}
-
 /// Verify that `ParallaxLayerComputed` is publicly accessible and that
 /// `user_offset` is additive on top of the computed offset.
 fn custom_offset() -> Scenario {
@@ -856,23 +863,30 @@ fn custom_offset() -> Scenario {
         .then(Action::WaitFrames(60))
         // Verify computed component exists on the mountain layer
         .then(assertions::custom(
-            "ParallaxLayerComputed is present on all layers",
+            "ParallaxLayerComputed and runtime state are exposed on tracked layers",
             |world| {
                 let lab = world.resource::<LabEntities>();
-                world.get::<ParallaxLayerComputed>(lab.mountain_layer).is_some()
+                let layer_entities: Vec<Entity> = {
+                    let Some(rig) = world
+                        .resource::<ParallaxDiagnostics>()
+                        .rigs
+                        .iter()
+                        .find(|rig| rig.rig == lab.forest_rig)
+                    else {
+                        return false;
+                    };
+                    rig.layers.iter().map(|layer| layer.layer).collect()
+                };
+
+                world
+                    .get::<ParallaxLayerComputed>(lab.mountain_layer)
+                    .is_some()
+                    && world.get::<RigRuntimeState>(lab.forest_rig).is_some()
+                    && layer_entities
+                        .iter()
+                        .all(|layer| world.get::<LayerRuntimeState>(*layer).is_some())
             },
         ))
-        // Snapshot the current computed offset
-        .then(Action::Custom(Box::new(|world| {
-            let mountain = world.resource::<LabEntities>().mountain_layer;
-            let computed = world
-                .get::<ParallaxLayerComputed>(mountain)
-                .copied()
-                .unwrap_or_default();
-            world.insert_resource(ComputedSnapshot {
-                offset: computed.offset,
-            });
-        })))
         .then(Action::Screenshot("custom_offset_before".into()))
         .then(Action::WaitFrames(1))
         // Apply user_offset to the mountain layer
@@ -891,7 +905,10 @@ fn custom_offset() -> Scenario {
                     .get::<ParallaxLayerComputed>(mountain)
                     .copied()
                     .unwrap_or_default();
-                let transform = world.get::<Transform>(mountain).copied().unwrap_or_default();
+                let transform = world
+                    .get::<Transform>(mountain)
+                    .copied()
+                    .unwrap_or_default();
                 // Transform x should include the computed offset plus user_offset(50)
                 (transform.translation.x - computed.offset.x - 50.0).abs() < 5.0
             },
@@ -954,9 +971,7 @@ fn time_control() -> Scenario {
         // (camera still moves, but auto-scroll is frozen)
         .then(assertions::custom(
             "ParallaxTimeScale 0 resource is accessible and applied",
-            |world| {
-                world.resource::<ParallaxTimeScale>().0 == 0.0
-            },
+            |world| world.resource::<ParallaxTimeScale>().0 == 0.0,
         ))
         .then(Action::Screenshot("time_control_frozen".into()))
         .then(Action::WaitFrames(1))
@@ -978,14 +993,15 @@ fn time_control() -> Scenario {
                     .is_some_and(|l| l.effective_offset.distance(snap) > 5.0)
             },
         ))
+        .then(assertions::resource_satisfies::<ParallaxTimeScale>(
+            "ParallaxTimeScale restored to 1.0",
+            |time| (time.0 - 1.0).abs() < 0.000_1,
+        ))
         .then(Action::Screenshot("time_control_restored".into()))
         .then(Action::WaitFrames(1))
         .then(assertions::log_summary("parallax_time_control"))
         .build()
 }
-
-#[derive(Resource, Clone, Copy)]
-struct SpeedMultiplierPhase(Vec2);
 
 /// Verify that `ParallaxRig::speed_multiplier` affects auto-scroll rate.
 fn speed_multiplier() -> Scenario {
@@ -996,19 +1012,6 @@ fn speed_multiplier() -> Scenario {
         )
         .then(mode(LabMode::Tight))
         .then(Action::WaitFrames(60))
-        // Record initial state
-        .then(Action::Custom(Box::new(|world| {
-            let forest_rig = world.resource::<LabEntities>().forest_rig;
-            let diag = world.resource::<ParallaxDiagnostics>();
-            let offset = diag
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == forest_rig)
-                .and_then(|rig| rig.layers.first())
-                .map(|l| l.effective_offset)
-                .unwrap_or(Vec2::ZERO);
-            world.insert_resource(SpeedMultiplierPhase(offset));
-        })))
         .then(Action::Screenshot("speed_mult_normal".into()))
         .then(Action::WaitFrames(1))
         // Set speed_multiplier to 0
@@ -1054,6 +1057,15 @@ fn speed_multiplier() -> Scenario {
                 rig.speed_multiplier = 1.0;
             }
         })))
+        .then(assertions::custom(
+            "speed_multiplier restored to 1.0",
+            |world| {
+                let forest_rig = world.resource::<LabEntities>().forest_rig;
+                world
+                    .get::<ParallaxRig>(forest_rig)
+                    .is_some_and(|rig| (rig.speed_multiplier - 1.0).abs() < 0.000_1)
+            },
+        ))
         .then(Action::Screenshot("speed_mult_restored".into()))
         .then(Action::WaitFrames(1))
         .then(assertions::log_summary("parallax_speed_multiplier"))

@@ -146,7 +146,10 @@ fn unbound_rig_uses_zero_camera_input_instead_of_reusing_parent_translation() {
 
     let rig = app
         .world_mut()
-        .spawn((ParallaxRig::default(), Transform::from_xyz(48.0, -20.0, 0.0)))
+        .spawn((
+            ParallaxRig::default(),
+            Transform::from_xyz(48.0, -20.0, 0.0),
+        ))
         .id();
     let layer = app
         .world_mut()
@@ -376,7 +379,11 @@ fn time_scale_zero_freezes_auto_scroll() {
     app.world_mut().run_schedule(Activate);
     app.world_mut().run_schedule(Tick);
 
-    let runtime = app.world().entity(layer).get::<LayerRuntimeState>().unwrap();
+    let runtime = app
+        .world()
+        .entity(layer)
+        .get::<LayerRuntimeState>()
+        .unwrap();
     assert_eq!(runtime.auto_phase, Vec2::ZERO);
 }
 

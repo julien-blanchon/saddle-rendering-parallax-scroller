@@ -79,7 +79,6 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(30))
         .then(Action::Screenshot("01_start".into()))
         .then(Action::WaitFrames(1))
-
         // Walk right at normal speed
         .then(Action::Custom(Box::new(|world| {
             push_player_right(world, 280.0);
@@ -87,7 +86,6 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(120)) // ~2 seconds of walking
         .then(Action::Screenshot("02_walking_right".into()))
         .then(Action::WaitFrames(1))
-
         // Jump while walking
         .then(Action::Custom(Box::new(|world| {
             make_player_jump(world);
@@ -95,12 +93,10 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(20)) // mid-air
         .then(Action::Screenshot("03_mid_jump".into()))
         .then(Action::WaitFrames(1))
-
         // Keep walking, wait for landing
         .then(Action::WaitFrames(40))
         .then(Action::Screenshot("04_after_landing".into()))
         .then(Action::WaitFrames(1))
-
         // Run fast (2x speed)
         .then(Action::Custom(Box::new(|world| {
             push_player_right(world, 280.0 * 1.8);
@@ -108,7 +104,6 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(150)) // ~2.5 seconds of running
         .then(Action::Screenshot("05_running_far".into()))
         .then(Action::WaitFrames(1))
-
         // Jump again while running
         .then(Action::Custom(Box::new(|world| {
             make_player_jump(world);
@@ -116,10 +111,8 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(15))
         .then(Action::Screenshot("06_run_jump".into()))
         .then(Action::WaitFrames(1))
-
         // Continue and let parallax settle
         .then(Action::WaitFrames(60))
-
         // Stop and let camera catch up
         .then(Action::Custom(Box::new(|world| {
             stop_player(world);
@@ -127,7 +120,6 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(60))
         .then(Action::Screenshot("07_stopped_final".into()))
         .then(Action::WaitFrames(1))
-
         // Walk left briefly to show direction change + camera lead flip
         .then(Action::Custom(Box::new(|world| {
             let mut query = world.query::<&mut Player>();
@@ -139,7 +131,6 @@ fn playthrough() -> Scenario {
         .then(Action::WaitFrames(120))
         .then(Action::Screenshot("08_walking_left".into()))
         .then(Action::WaitFrames(1))
-
         .then(Action::Custom(Box::new(|world| {
             stop_player(world);
         })))

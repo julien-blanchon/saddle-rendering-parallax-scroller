@@ -160,7 +160,10 @@ impl Plugin for ParallaxScrollerPlugin {
             )
             .add_systems(
                 self.update_schedule,
-                (systems::write_layer_transforms, systems::sync_segment_children)
+                (
+                    systems::write_layer_transforms,
+                    systems::sync_segment_children,
+                )
                     .chain()
                     .in_set(ParallaxScrollerSystems::WriteTransforms)
                     .run_if(systems::runtime_is_active),

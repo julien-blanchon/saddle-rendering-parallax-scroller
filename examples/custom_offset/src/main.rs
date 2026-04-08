@@ -216,7 +216,8 @@ fn wobble_system(
     for (mut computed, mut wobble) in &mut layers {
         wobble.frequency = pane.wobble_frequency;
         wobble.amplitude = pane.wobble_amplitude;
-        computed.offset.y += (t * wobble.frequency * std::f32::consts::TAU).sin() * wobble.amplitude;
+        computed.offset.y +=
+            (t * wobble.frequency * std::f32::consts::TAU).sin() * wobble.amplitude;
     }
 }
 

@@ -97,9 +97,10 @@ pub(crate) fn ensure_layer_state(
     >,
 ) {
     for layer in &layers {
-        commands
-            .entity(layer)
-            .insert((LayerRuntimeState::default(), ParallaxLayerComputed::default()));
+        commands.entity(layer).insert((
+            LayerRuntimeState::default(),
+            ParallaxLayerComputed::default(),
+        ));
     }
 }
 
