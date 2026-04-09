@@ -1,3 +1,5 @@
+mod support;
+
 use bevy::prelude::*;
 use saddle_bevy_e2e::{
     action::Action,
@@ -9,7 +11,7 @@ use saddle_rendering_parallax_scroller::{
     ParallaxLayerComputed, ParallaxRig, ParallaxTimeScale, RigRuntimeState,
 };
 
-use crate::{LabEntities, LabMode, LabMotion, set_lab_mode};
+use crate::{LabEntities, LabMode, LabMotion};
 
 // ── Extra snapshots used by new scenarios ────────────────────────────────────
 
@@ -92,10 +94,6 @@ pub fn scenario_by_name(name: &str) -> Option<Scenario> {
     }
 }
 
-fn mode(mode: LabMode) -> Action {
-    Action::Custom(Box::new(move |world| set_lab_mode(world, mode)))
-}
-
 fn smoke() -> Scenario {
     Scenario::builder("parallax_scroller_smoke")
         .description("Launch the lab, verify all showcase rigs are present, and capture the default composition.")
@@ -152,28 +150,15 @@ fn smoke() -> Scenario {
 fn camera_motion() -> Scenario {
     Scenario::builder("parallax_camera_motion")
         .description("Drive the camera across wrap boundaries, capture multiple checkpoints, and verify effective offsets change without changing layer counts.")
-        .then(mode(LabMode::Wide))
+        .then(support::mode_action(LabMode::Wide))
         .then(Action::WaitFrames(30))
         .then(Action::Screenshot("camera_motion_start".into()))
         .then(Action::WaitFrames(1))
         .then(Action::Custom(Box::new(|world| {
             let forest_rig = world.resource::<LabEntities>().forest_rig;
-            let offset = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == forest_rig)
-                .and_then(|rig| rig.layers.first())
-                .map(|layer| layer.effective_offset)
-                .unwrap_or(Vec2::ZERO);
+            let offset = support::first_layer_offset(world, forest_rig).unwrap_or(Vec2::ZERO);
             world.insert_resource(OffsetSnapshot(offset));
-            let layer_count = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == forest_rig)
-                .map(|rig| rig.layers.len())
-                .unwrap_or_default();
+            let layer_count = support::layer_count(world, forest_rig).unwrap_or_default();
             world.insert_resource(LayerCountSnapshot(layer_count));
         })))
         .then(Action::WaitFrames(80))
@@ -183,12 +168,7 @@ fn camera_motion() -> Scenario {
         .then(assertions::custom("forest offsets changed under camera motion", |world| {
             let lab = world.resource::<LabEntities>();
             let before = world.resource::<OffsetSnapshot>().0;
-            let Some(rig) = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == lab.forest_rig)
-            else {
+            let Some(rig) = support::rig(world, lab.forest_rig) else {
                 return false;
             };
             rig.layers
@@ -210,7 +190,7 @@ fn camera_motion() -> Scenario {
 fn finite_bounds() -> Scenario {
     Scenario::builder("parallax_finite_bounds")
         .description("Drive the lab camera far enough to hit the finite vista clamp and verify the layer stays inside its authored horizontal bounds.")
-        .then(mode(LabMode::Wide))
+        .then(support::mode_action(LabMode::Wide))
         .then(Action::WaitFrames(40))
         .then(Action::Screenshot("finite_bounds_start".into()))
         .then(Action::WaitFrames(1))
@@ -239,28 +219,15 @@ fn finite_bounds() -> Scenario {
 fn zoom() -> Scenario {
     Scenario::builder("parallax_zoom")
         .description("Widen the orthographic view, capture before and after, and verify the tiled coverage grows with the viewport.")
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(45))
         .then(Action::Screenshot("zoom_before".into()))
         .then(Action::WaitFrames(1))
         .then(Action::Custom(Box::new(|world| {
             let forest_rig = world.resource::<LabEntities>().forest_rig;
-            let before = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == forest_rig)
-                .and_then(|rig| rig.layers.first())
-                .map(|layer| layer.coverage_size)
-                .unwrap_or(Vec2::ZERO);
+            let before = support::first_layer_coverage(world, forest_rig).unwrap_or(Vec2::ZERO);
             world.insert_resource(CoverageSnapshot(before));
-            let viewport = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == forest_rig)
-                .map(|rig| rig.viewport_size)
-                .unwrap_or(Vec2::ZERO);
+            let viewport = support::viewport_size(world, forest_rig).unwrap_or(Vec2::ZERO);
             world.insert_resource(ViewportSnapshot(viewport));
             set_lab_mode(world, LabMode::Wide);
         })))
@@ -269,7 +236,7 @@ fn zoom() -> Scenario {
             let lab = world.resource::<LabEntities>();
             let before = world.resource::<CoverageSnapshot>().0;
             let viewport_before = world.resource::<ViewportSnapshot>().0;
-            world.resource::<ParallaxDiagnostics>().rigs.iter().find(|rig| rig.rig == lab.forest_rig).is_some_and(|rig| {
+            support::rig(world, lab.forest_rig).is_some_and(|rig| {
                 rig.viewport_size.x > viewport_before.x
                     && rig.layers.first().is_some_and(|layer| {
                         layer.coverage_size.x > before.x
@@ -287,18 +254,18 @@ fn zoom() -> Scenario {
 fn pixel_snap() -> Scenario {
     Scenario::builder("parallax_pixel_snap")
         .description("Enable slow drift, capture two frames, and verify the snapped rig keeps whole-pixel offsets while the unsnapped rig does not.")
-        .then(mode(LabMode::PixelDrift))
+        .then(support::mode_action(LabMode::PixelDrift))
         .then(Action::WaitFrames(60))
         .then(Action::Screenshot("pixel_snap_a".into()))
         .then(Action::WaitFrames(1))
         .then(Action::WaitFrames(40))
         .then(assertions::custom("snapped and unsnapped offsets diverge", |world| {
             let lab = world.resource::<LabEntities>();
-            let Some(rig) = world.resource::<ParallaxDiagnostics>().rigs.iter().find(|rig| rig.rig == lab.pixel_rig) else {
+            let Some(rig) = support::rig(world, lab.pixel_rig) else {
                 return false;
             };
-            let snapped = rig.layers.iter().find(|layer| layer.layer == lab.snapped_layer);
-            let unsnapped = rig.layers.iter().find(|layer| layer.layer == lab.unsnapped_layer);
+            let snapped = support::layer(world, lab.pixel_rig, lab.snapped_layer);
+            let unsnapped = support::layer(world, lab.pixel_rig, lab.unsnapped_layer);
             match (snapped, unsnapped) {
                 (Some(snapped), Some(unsnapped)) => {
                     snapped.effective_offset.x.fract().abs() < 0.001
@@ -324,7 +291,7 @@ fn depth_mapping() -> Scenario {
         .description(
             "Convert the mountain layer to perspective depth mapping, vary the camera depth, and verify the effective parallax factor and scale respond.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(20))
         .then(Action::Custom(Box::new(|world| {
             let lab = *world.resource::<LabEntities>();
@@ -431,19 +398,12 @@ fn autoscroll() -> Scenario {
         // PixelDrift keeps the camera moving at ~17 px/s which is slow enough
         // that any delta we observe in the starfield (which auto-scrolls at
         // -12 px/s diagonally) cannot be fully attributed to camera motion.
-        .then(mode(LabMode::PixelDrift))
+        .then(support::mode_action(LabMode::PixelDrift))
         .then(Action::WaitFrames(30))
         // Snapshot the current offset of the first layer on the pixel rig.
         .then(Action::Custom(Box::new(|world| {
             let pixel_rig = world.resource::<LabEntities>().pixel_rig;
-            let offset = world
-                .resource::<ParallaxDiagnostics>()
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == pixel_rig)
-                .and_then(|rig| rig.layers.first())
-                .map(|layer| layer.effective_offset)
-                .unwrap_or(Vec2::ZERO);
+            let offset = support::first_layer_offset(world, pixel_rig).unwrap_or(Vec2::ZERO);
             world.insert_resource(AutoScrollOffsetSnapshot(offset));
         })))
         .then(Action::Screenshot("autoscroll_before".into()))
@@ -456,12 +416,7 @@ fn autoscroll() -> Scenario {
             |world| {
                 let pixel_rig = world.resource::<LabEntities>().pixel_rig;
                 let before = world.resource::<AutoScrollOffsetSnapshot>().0;
-                world
-                    .resource::<ParallaxDiagnostics>()
-                    .rigs
-                    .iter()
-                    .find(|rig| rig.rig == pixel_rig)
-                    .and_then(|rig| rig.layers.first())
+                support::first_layer_offset(world, pixel_rig)
                     .is_some_and(|layer| {
                         // The combined camera + auto-scroll displacement must exceed
                         // a threshold that cannot be explained by camera motion alone
@@ -476,16 +431,11 @@ fn autoscroll() -> Scenario {
                 let pixel_rig = world.resource::<LabEntities>().pixel_rig;
                 // At least one layer must show a non-trivial vertical offset, which
                 // is only possible via auto_scroll (the camera y-movement is < 5 px).
-                world
-                    .resource::<ParallaxDiagnostics>()
-                    .rigs
-                    .iter()
-                    .find(|rig| rig.rig == pixel_rig)
-                    .is_some_and(|rig| {
-                        rig.layers
-                            .iter()
-                            .any(|layer| layer.effective_offset.y.abs() > 2.0)
-                    })
+                support::rig(world, pixel_rig).is_some_and(|rig| {
+                    rig.layers
+                        .iter()
+                        .any(|layer| layer.effective_offset.y.abs() > 2.0)
+                })
             },
         ))
         .then(Action::Screenshot("autoscroll_after".into()))
@@ -505,14 +455,13 @@ fn layer_differential() -> Scenario {
             "Drive the camera horizontally and verify that layers with a lower \
              camera_factor lag behind layers with a higher factor.",
         )
-        .then(mode(LabMode::Wide))
+        .then(support::mode_action(LabMode::Wide))
         .then(Action::WaitFrames(30))
         // Record per-layer offsets on the forest rig for both an extreme-factor
         // (mountain, 0.84×) and a foreground (canopy, 1.08×) layer.
         .then(Action::Custom(Box::new(|world| {
             let forest_rig = world.resource::<LabEntities>().forest_rig;
-            let diag = world.resource::<ParallaxDiagnostics>();
-            let Some(rig) = diag.rigs.iter().find(|rig| rig.rig == forest_rig) else {
+            let Some(rig) = support::rig(world, forest_rig) else {
                 return;
             };
             // Heuristic: the layer with the smallest x camera_factor has the
@@ -554,8 +503,7 @@ fn layer_differential() -> Scenario {
             |world| {
                 let snap = *world.resource::<DifferentialSnapshot>();
                 let forest_rig = world.resource::<LabEntities>().forest_rig;
-                let diag = world.resource::<ParallaxDiagnostics>();
-                let Some(rig) = diag.rigs.iter().find(|rig| rig.rig == forest_rig) else {
+                let Some(rig) = support::rig(world, forest_rig) else {
                     return false;
                 };
                 let slow_now = rig
@@ -591,8 +539,7 @@ fn layer_differential() -> Scenario {
             "forest rig reports distinct camera factors across its layers",
             |world| {
                 let forest_rig = world.resource::<LabEntities>().forest_rig;
-                let diag = world.resource::<ParallaxDiagnostics>();
-                let Some(rig) = diag.rigs.iter().find(|rig| rig.rig == forest_rig) else {
+                let Some(rig) = support::rig(world, forest_rig) else {
                     return false;
                 };
                 if rig.layers.len() < 2 {
@@ -626,25 +573,14 @@ fn multi_rig() -> Scenario {
             "Verify that three independent rigs sharing one camera each maintain \
              valid coverage and that their layer counts stay stable under camera motion.",
         )
-        .then(mode(LabMode::Wide))
+        .then(support::mode_action(LabMode::Wide))
         .then(Action::WaitFrames(45))
         // Record the initial rig and layer topology.
         .then(Action::Custom(Box::new(|world| {
             let lab = *world.resource::<LabEntities>();
-            let diag = world.resource::<ParallaxDiagnostics>();
-            let forest_layers = diag
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == lab.forest_rig)
-                .map(|rig| rig.layers.len())
-                .unwrap_or(0);
-            let pixel_layers = diag
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == lab.pixel_rig)
-                .map(|rig| rig.layers.len())
-                .unwrap_or(0);
-            let rig_count = diag.rigs.len();
+            let rig_count = world.resource::<ParallaxDiagnostics>().rigs.len();
+            let forest_layers = support::layer_count(world, lab.forest_rig).unwrap_or(0);
+            let pixel_layers = support::layer_count(world, lab.pixel_rig).unwrap_or(0);
             world.insert_resource(MultiRigSnapshot {
                 rig_count,
                 forest_layer_count: forest_layers,
@@ -661,16 +597,8 @@ fn multi_rig() -> Scenario {
                 let lab = *world.resource::<LabEntities>();
                 let diag = world.resource::<ParallaxDiagnostics>();
                 diag.rigs.len() == snap.rig_count
-                    && diag
-                        .rigs
-                        .iter()
-                        .find(|rig| rig.rig == lab.forest_rig)
-                        .is_some_and(|rig| rig.layers.len() == snap.forest_layer_count)
-                    && diag
-                        .rigs
-                        .iter()
-                        .find(|rig| rig.rig == lab.pixel_rig)
-                        .is_some_and(|rig| rig.layers.len() == snap.pixel_layer_count)
+                    && support::layer_count(world, lab.forest_rig) == Some(snap.forest_layer_count)
+                    && support::layer_count(world, lab.pixel_rig) == Some(snap.pixel_layer_count)
             },
         ))
         .then(assertions::custom(
@@ -702,13 +630,10 @@ fn multi_rig() -> Scenario {
             "camera_target is resolved on each rig",
             |world| {
                 let lab = *world.resource::<LabEntities>();
-                let diag = world.resource::<ParallaxDiagnostics>();
                 [lab.forest_rig, lab.vista_rig, lab.pixel_rig]
                     .iter()
                     .all(|rig_entity| {
-                        diag.rigs
-                            .iter()
-                            .find(|rig| rig.rig == *rig_entity)
+                        support::rig(world, *rig_entity)
                             .is_some_and(|rig| rig.camera_target == Some(lab.camera))
                     })
             },
@@ -729,7 +654,7 @@ fn stress_layer_count() -> Scenario {
             "Verify that total tracked layer count stays stable across all rigs \
              after 180 frames of continuous camera motion.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(40))
         // Record the total layer count across all rigs.
         .then(Action::Custom(Box::new(|world| {
@@ -780,7 +705,7 @@ fn layer_toggle() -> Scenario {
             "Disable a layer mid-run, confirm it disappears from diagnostics, \
              then re-enable it and confirm coverage is restored.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(40))
         .then(assertions::custom(
             "mountain layer is initially tracked in diagnostics",
@@ -859,7 +784,7 @@ fn custom_offset() -> Scenario {
             "Verify ParallaxLayerComputed is populated, and that user_offset \
              shifts the final transform additively on top of the computed offset.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(60))
         // Verify computed component exists on the mountain layer
         .then(assertions::custom(
@@ -945,19 +870,12 @@ fn time_control() -> Scenario {
             "Set ParallaxTimeScale to 0, verify auto-scroll freezes. \
              Restore to 1.0, verify it resumes.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(60))
         // Snapshot auto_phase from the first starfield layer on the pixel rig
         .then(Action::Custom(Box::new(|world| {
             let pixel_rig = world.resource::<LabEntities>().pixel_rig;
-            let diag = world.resource::<ParallaxDiagnostics>();
-            let offset = diag
-                .rigs
-                .iter()
-                .find(|rig| rig.rig == pixel_rig)
-                .and_then(|rig| rig.layers.first())
-                .map(|l| l.effective_offset)
-                .unwrap_or(Vec2::ZERO);
+            let offset = support::first_layer_offset(world, pixel_rig).unwrap_or(Vec2::ZERO);
             world.insert_resource(TimeControlAutoPhase(offset));
         })))
         .then(Action::Screenshot("time_control_normal".into()))
@@ -985,12 +903,8 @@ fn time_control() -> Scenario {
             |world| {
                 let snap = world.resource::<TimeControlAutoPhase>().0;
                 let pixel_rig = world.resource::<LabEntities>().pixel_rig;
-                let diag = world.resource::<ParallaxDiagnostics>();
-                diag.rigs
-                    .iter()
-                    .find(|rig| rig.rig == pixel_rig)
-                    .and_then(|rig| rig.layers.first())
-                    .is_some_and(|l| l.effective_offset.distance(snap) > 5.0)
+                support::first_layer_offset(world, pixel_rig)
+                    .is_some_and(|offset| offset.distance(snap) > 5.0)
             },
         ))
         .then(assertions::resource_satisfies::<ParallaxTimeScale>(
@@ -1010,7 +924,7 @@ fn speed_multiplier() -> Scenario {
             "Set speed_multiplier to 0 on the forest rig, verify auto-scroll freezes. \
              Set to 2.0, verify it accelerates.",
         )
-        .then(mode(LabMode::Tight))
+        .then(support::mode_action(LabMode::Tight))
         .then(Action::WaitFrames(60))
         .then(Action::Screenshot("speed_mult_normal".into()))
         .then(Action::WaitFrames(1))
